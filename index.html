@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบริหารจัดการและบันทึกเวลาการทำงาน (Time Attendance) - โรงเรียนบางแพปฐมพิทยา</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-slate-50 text-slate-700 antialiased">
+
+    <!-- 1. หน้า Login เข้าสู่ระบบ -->
+    <div id="login-section"
+        class="flex items-center justify-center min-h-screen bg-gradient-to-br from-rose-900 to-red-950 p-4">
+        <div class="bg-white/95 backdrop-blur-sm p-8 rounded-3xl shadow-xl w-full max-w-md border border-amber-200/50">
+            <div class="text-center mb-6">
+                <div class="mx-auto mb-3 flex items-center justify-center">
+                    <img src="images/logo.png" alt="โลโก้โรงเรียนบางแพปฐมพิทยา" class="w-28 h-28 object-contain">
+                </div>
+                <h1 class="text-2xl font-bold text-rose-950">School Attendance</h1>
+                <p class="text-sm font-medium text-slate-700 mt-1">โรงเรียนบางแพปฐมพิทยา</p>
+            </div>
+
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label
+                        class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">เลือกระดับบทบาท
+                        / หน้าที่</label>
+                    <div class="relative">
+                        <span
+                            class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </span>
+                        <select id="user-role" required
+                            class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none transition">
+                            <option value="executive">ผู้บริหารสถานศึกษา (Executive)</option>
+                            <option value="hr">ฝ่ายบริหารงานบุคคล / ธุรการ (HR)</option>
+                            <option value="staff">ครูและบุคลากรทางการศึกษา (Staff)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label
+                        class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">รหัสประจำตัวบุคลากร</label>
+                    <div class="relative">
+                        <span
+                            class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                            </svg>
+                        </span>
+                        <input type="text" id="user-id" required
+                            class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none transition"
+                            placeholder="เช่น 670710726">
+                    </div>
+                </div>
+
+                <div>
+                    <label
+                        class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">รหัสผ่าน</label>
+                    <div class="relative">
+                        <span
+                            class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                        </span>
+                        <input type="password" id="user-pass" required
+                            class="w-full pl-11 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none transition"
+                            placeholder="••••••••">
+                        <button type="button" onclick="togglePasswordVisibility()"
+                            class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 focus:outline-none">
+                            <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="login-error" class="text-rose-600 text-xs text-center hidden pt-1">
+                    ข้อมูลเข้าสู่ระบบหรือบทบาทไม่ถูกต้อง</div>
+                <button type="submit" id="login-btn"
+                    class="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-rose-950 font-bold rounded-xl shadow-md transition mt-6">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. หน้าหลัก (Dashboard) -->
+    <div id="app-section" class="hidden min-h-screen flex flex-col">
+        <header class="bg-rose-900 text-white shadow-sm border-b border-rose-800">
+            <div class="container mx-auto px-6 h-20 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-center">
+                        <img src="images/logo.png" alt="โลโก้โรงเรียนบางแพปฐมพิทยา" class="w-14 h-14 object-contain">
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-lg leading-tight">ระบบบริหารและบันทึกเวลาการทำงาน</h2>
+                        <p class="text-xs text-rose-200">โรงเรียนบางแพปฐมพิทยา</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span id="user-badge"
+                        class="px-3.5 py-1.5 bg-white text-rose-950 rounded-lg text-xs font-bold shadow-sm border border-rose-100"></span>
+                    <button onclick="handleLogout()"
+                        class="px-4 py-2 bg-rose-950/40 hover:bg-rose-950 text-rose-100 rounded-xl text-xs font-semibold transition border border-rose-700/50">ออกจากระบบ</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-6 py-8 flex-grow max-w-6xl">
+            <!-- Navigation Tabs -->
+            <div class="flex flex-wrap gap-2 mb-8 p-1.5 bg-white rounded-2xl shadow-sm border border-slate-200/60 w-fit"
+                id="nav-tabs">
+                <button onclick="switchTab('executive-overview')" id="tab-executive-overview"
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">พิจารณาอนุมัติคำขอ</button>
+                <button onclick="switchTab('hr-management')" id="tab-hr-management"
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
+                <button onclick="switchTab('checkin')" id="tab-checkin"
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">ลงเวลาทำงาน</button>
+                <button onclick="switchTab('leave')" id="tab-leave"
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ยื่นคำขอออกนอกสถานศึกษา</button>
+                <button id="tab-executive-report-btn" onclick="switchTab('report')" id="tab-report"
+                    class="px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">สรุปสถิติ
+                    & รายงานประเมิน 6 เดือน</button>
+            </div>
+
+            <!-- TAB EXECUTIVE: ผู้บริหารสถานศึกษา -->
+            <div id="content-executive-overview" class="hidden space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div class="p-5 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                        <p class="text-xs font-semibold text-slate-400 uppercase">บุคลากรทั้งหมด</p>
+                        <h4 class="text-2xl font-bold text-slate-800 mt-1">48 <span
+                                class="text-xs font-normal text-slate-500">คน</span></h4>
+                    </div>
+                    <div class="p-5 bg-white rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-sm">
+                        <p class="text-xs font-semibold text-emerald-600 uppercase">ลงเวลาแล้ว (ตรงเวลา)</p>
+                        <h4 class="text-2xl font-bold text-emerald-700 mt-1">42 <span
+                                class="text-xs font-normal text-emerald-600">คน</span></h4>
+                    </div>
+                    <div class="p-5 bg-white rounded-2xl border border-amber-100 bg-amber-50/20 shadow-sm">
+                        <p class="text-xs font-semibold text-amber-600 uppercase">มาสาย</p>
+                        <h4 class="text-2xl font-bold text-amber-700 mt-1">4 <span
+                                class="text-xs font-normal text-amber-600">คน</span></h4>
+                    </div>
+                    <div class="p-5 bg-white rounded-2xl border border-rose-100 bg-rose-50/20 shadow-sm">
+                        <p class="text-xs font-semibold text-rose-600 uppercase">คำขอรออนุมัติ</p>
+                        <h4 id="exec-pending-count" class="text-2xl font-bold text-rose-700 mt-1">0 <span
+                                class="text-xs font-normal text-rose-600">รายการ</span></h4>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-800">ศูนย์พิจารณาอนุมัติคำขอออกนอกสถานศึกษา /
+                                ไปราชการ</h3>
+                            <p class="text-xs text-slate-500">
+                                ตรวจสอบข้อมูลการปฏิบัติราชการและการฝากคาบสอนเพื่อไม่ให้กระทบนักเรียน</p>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr
+                                    class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <th class="py-3 px-4">ชื่อ-สกุล / รหัส</th>
+                                    <th class="py-3 px-4">เหตุผลความจำเป็น</th>
+                                    <th class="py-3 px-4">วันที่ - เวลา</th>
+                                    <th class="py-3 px-4">การฝากคาบสอนแทน</th>
+                                    <th class="py-3 px-4">สถานะ</th>
+                                    <th class="py-3 px-4 text-center">การพิจารณา</th>
+                                </tr>
+                            </thead>
+                            <tbody id="exec-requests-list" class="text-sm divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB HR: ฝ่ายบริหารงานบุคคล / ธุรการ -->
+            <div id="content-hr-management" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-800">
+                                ตารางกำกับและตรวจสอบการมาปฏิบัติงานบุคลากรรายวัน</h3>
+                            <p class="text-xs text-slate-500">สำหรับตรวจสอบข้อมูลสถิติ ป้องกันการลงเวลาแทนกัน
+                                และสรุปยอดส่งทางราชการ</p>
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <input type="text" id="hr-search-input" onkeyup="filterHrTable()"
+                                placeholder="ค้นหาชื่อหรือรหัสครู..."
+                                class="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400">
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr
+                                    class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <th class="py-3 px-4">รหัสบุคลากร</th>
+                                    <th class="py-3 px-4">เวลาสแกนเข้า</th>
+                                    <th class="py-3 px-4">เวลาสแกนออก</th>
+                                    <th class="py-3 px-4">สถานะประมวลผล</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hr-attendance-list" class="text-sm divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB STAFF: ลงเวลาทำงาน -->
+            <div id="content-checkin" class="hidden space-y-6">
+                <div
+                    class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-amber-400"></div>
+                    <div>
+                        <span
+                            class="text-xs font-semibold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">ระบบสแกนอัตลักษณ์
+                            / GPS</span>
+                        <h3 class="text-xl font-bold text-slate-800 mt-2">บันทึกเวลาเข้า-ออกประจำวัน</h3>
+                        <p class="text-sm text-slate-500 mt-0.5" id="current-date"></p>
+                    </div>
+                    <div class="flex gap-3 w-full md:w-auto">
+                        <button onclick="recordCheckIn()"
+                            class="flex-1 md:flex-none px-6 py-3 bg-rose-900 hover:bg-rose-950 text-white font-semibold rounded-2xl shadow-sm transition">สแกนเข้างาน</button>
+                        <button onclick="recordCheckOut()"
+                            class="flex-1 md:flex-none px-6 py-3 bg-amber-400 hover:bg-amber-300 text-rose-950 font-semibold rounded-2xl shadow-sm transition">สแกนออกงาน</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60">
+                    <h3 class="text-base font-bold text-slate-800 mb-4">ประวัติการมาปฏิบัติงานของคุณ</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr
+                                    class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <th class="py-3 px-4">เวลาเข้างาน</th>
+                                    <th class="py-3 px-4">เวลาออกงาน</th>
+                                    <th class="py-3 px-4">สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-history" class="text-sm divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB STAFF: ยื่นคำขอออกนอกสถานศึกษา พร้อมประวัติสถานะ Real-time -->
+            <div id="content-leave" class="hidden space-y-6">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">แบบฟอร์มยื่นคำขอออกนอกสถานศึกษา / ไปราชการ</h3>
+                    <form onsubmit="submitLeave(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">วันที่ต้องการออก</label>
+                                <input type="date" id="leave-date" required
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">เวลาออก - กลับ (ไม่เกิน 3
+                                    ชม.)</label>
+                                <input type="text" id="leave-timerange" placeholder="เช่น 10:00 - 12:00 น." required
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">เหตุผลและความจำเป็น</label>
+                            <textarea id="leave-reason" rows="3" required
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                placeholder="ระบุเหตุผล..."></textarea>
+                        </div>
+                        <div class="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 space-y-3">
+                            <h4 class="text-sm font-bold text-amber-900">จัดการฝากคาบสอน (กรณีมีคาบสอนตรงกัน
+                                เพื่อประโยชน์ของนักเรียน)</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <input type="text" id="leave-subject" placeholder="รายวิชา"
+                                    class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+                                <input type="text" id="leave-period" placeholder="คาบสอน / ห้อง"
+                                    class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+                                <input type="text" id="leave-substitute" placeholder="ชื่อครูผู้สอนแทน"
+                                    class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+                            </div>
+                        </div>
+                        <button type="submit"
+                            class="px-6 py-3 bg-rose-900 hover:bg-rose-950 text-white font-semibold rounded-xl text-sm shadow-sm transition">ยื่นคำขออนุมัติ</button>
+                    </form>
+
+                    <!-- ตารางแสดงประวัติและสถานะการอนุมัติแบบ Real-time ของ Staff -->
+                    <div class="mt-8 pt-6 border-t border-slate-100">
+                        <h4 class="text-base font-bold text-slate-800 mb-4">ประวัติและสถานะการขออนุมัติของคุณ</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr
+                                        class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <th class="py-3 px-4">วันที่ - เวลาที่ขอ</th>
+                                        <th class="py-3 px-4">เหตุผล</th>
+                                        <th class="py-3 px-4">ผู้สอนแทน</th>
+                                        <th class="py-3 px-4">สถานะการอนุมัติ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-leave-history" class="text-sm divide-y divide-slate-50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB ALL ROLES: รายงานสถิติประกอบการประเมิน 6 เดือน -->
+            <!-- TAB ALL ROLES / EXECUTIVE REPORT: รายงานสถิติประกอบการประเมิน 6 เดือน -->
+            <div id="content-report" class="hidden space-y-6">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60 space-y-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-800">สรุปรายงานสถิติการมาปฏิบัติงาน (รองรับการประเมินรอบ 6 เดือน)</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">ข้อมูลสรุปสถิติรายบุคคลของครูและบุคลากรทางการศึกษา</p>
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <input type="text" id="report-search-input" onkeyup="filterReportTable()" placeholder="ค้นหาชื่อ, รหัส หรือกลุ่มสาระ..." class="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 w-full md:w-64">
+                            <button onclick="window.print()" class="px-4 py-2 bg-rose-900 hover:bg-rose-950 text-white font-semibold rounded-xl text-xs shadow-sm transition whitespace-nowrap">พิมพ์รายงาน</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        <div class="p-6 bg-emerald-50/60 rounded-2xl border border-emerald-100">
+                            <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">มาตรงเวลา (รวม)</p>
+                            <h4 id="stat-ontime" class="text-3xl font-extrabold text-emerald-800 mt-2">0 <span class="text-sm font-normal text-emerald-600">ครั้ง</span></h4>
+                        </div>
+                        <div class="p-6 bg-amber-50/60 rounded-2xl border border-amber-100">
+                            <p class="text-xs font-semibold text-amber-600 uppercase tracking-wider">มาสาย (รวม)</p>
+                            <h4 id="stat-late" class="text-3xl font-extrabold text-amber-800 mt-2">0 <span class="text-sm font-normal text-amber-600">ครั้ง</span></h4>
+                        </div>
+                        <div class="p-6 bg-rose-50/60 rounded-2xl border border-rose-100">
+                            <p class="text-xs font-semibold text-rose-600 uppercase tracking-wider">คำขอลา / ออกนอกพื้นที่ (รวม)</p>
+                            <h4 id="stat-leave" class="text-3xl font-extrabold text-rose-800 mt-2">0 <span class="text-sm font-normal text-rose-600">รายการ</span></h4>
+                        </div>
+                    </div>
+
+                    <!-- ตารางสรุปสถิติรายบุคคล (สำหรับประเมิน 6 เดือน) -->
+                    <div class="pt-4 border-t border-slate-100">
+                        <h4 class="text-sm font-bold text-slate-800 mb-4">ตารางสถิติรายบุคคล (ประกอบการประเมินผลการปฏิบัติงาน)</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <th class="py-3 px-4">รหัส / ชื่อ-นามสกุล</th>
+                                        <th class="py-3 px-4">กลุ่มสาระ / ฝ่าย</th>
+                                        <th class="py-3 px-4 text-center">มาตรงเวลา (ครั้ง)</th>
+                                        <th class="py-3 px-4 text-center">มาสาย (ครั้ง)</th>
+                                        <th class="py-3 px-4 text-center">ลา / ออกนอกพื้นที่</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="individual-report-list" class="text-sm divide-y divide-slate-50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
