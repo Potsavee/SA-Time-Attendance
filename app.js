@@ -14,6 +14,7 @@ let checkInLocationVerified = false;
 let checkInCameraReady = false;
 let attendanceScanType = 'check_in';
 let notificationTimeout = null;
+let realtimeChannel = null;
 
 function showNotification(message, type = 'success') {
     const toast = document.getElementById('notification-toast');
@@ -150,6 +151,7 @@ async function handleLogin(event) {
         }
 
         document.getElementById('user-badge').innerText = `ผู้ใช้งาน: ${currentUser.name} (${roleText})`;
+        subscribeToRealtimeUpdates();
 
     } catch (err) {
         console.error("Login Error:", err);
@@ -158,12 +160,74 @@ async function handleLogin(event) {
 }
 
 function handleLogout() {
+    stopRealtimeSubscriptions();
     currentUser = null;
     document.getElementById('staff-leave-history').innerHTML = '';
     document.getElementById('app-section').classList.add('hidden');
     document.getElementById('login-section').classList.remove('hidden');
     document.getElementById('user-id').value = '';
     document.getElementById('user-pass').value = '';
+}
+
+function subscribeToRealtimeUpdates() {
+    stopRealtimeSubscriptions();
+    const subscribedStaffId = currentUser.staff_id;
+
+    realtimeChannel = supabaseClient
+        .channel(`attendance-updates-${subscribedStaffId}`)
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'attendance_logs'
+        }, () => {
+            if (currentUser?.staff_id !== subscribedStaffId) return;
+
+            if (currentUser.role === 'hr') {
+                loadHrAttendanceLogs();
+            }
+            if (currentUser.role === 'staff' || currentUser.role === 'hr') {
+                loadAttendanceHistory();
+            }
+            if (currentUser.role === 'executive') {
+                loadExecutiveReport();
+            }
+        })
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'leave_requests'
+        }, () => {
+            if (currentUser?.staff_id !== subscribedStaffId) return;
+
+            if (currentUser.role === 'executive') {
+                loadExecutiveRequests();
+                loadExecutiveReport();
+            } else {
+                loadStaffLeaveHistory();
+            }
+        })
+        .subscribe((status, error) => {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.error('Supabase Realtime subscription failed:', error || status);
+                if (currentUser?.staff_id === subscribedStaffId) {
+                    showNotification('เชื่อมต่อข้อมูล Real-time ไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า Supabase Realtime', 'error');
+                }
+            }
+        });
+}
+
+function stopRealtimeSubscriptions() {
+    if (!realtimeChannel) return;
+
+    const channel = realtimeChannel;
+    realtimeChannel = null;
+    supabaseClient.removeChannel(channel).then(status => {
+        if (status !== 'ok') {
+            console.error('Could not remove Supabase Realtime subscription:', status);
+        }
+    }).catch(error => {
+        console.error('Could not remove Supabase Realtime subscription:', error);
+    });
 }
 
 function switchTab(tabName) {
