@@ -58,6 +58,7 @@ function resetLeaveTimePickers() {
 initializeLeaveTimePickers();
 
 let currentUser = null;
+let staffLeaveHistoryLoadId = 0;
 
 function togglePasswordVisibility() {
     const passwordInput = document.getElementById('user-pass');
@@ -161,6 +162,7 @@ async function handleLogin(event) {
 
 function handleLogout() {
     stopRealtimeSubscriptions();
+    staffLeaveHistoryLoadId += 1;
     currentUser = null;
     document.getElementById('staff-leave-history').innerHTML = '';
     document.getElementById('app-section').classList.add('hidden');
@@ -197,14 +199,14 @@ function subscribeToRealtimeUpdates() {
             schema: 'public',
             table: 'leave_requests'
         }, () => {
-            if (currentUser?.staff_id !== subscribedStaffId) return;
-
-            if (currentUser.role === 'executive') {
-                loadExecutiveRequests();
-                loadExecutiveReport();
-            } else {
-                loadStaffLeaveHistory();
-            }
+            refreshLeaveRequestViews(subscribedStaffId);
+        })
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'leave_applications'
+        }, () => {
+            refreshLeaveRequestViews(subscribedStaffId);
         })
         .subscribe((status, error) => {
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -214,6 +216,17 @@ function subscribeToRealtimeUpdates() {
                 }
             }
         });
+}
+
+function refreshLeaveRequestViews(subscribedStaffId) {
+    if (currentUser?.staff_id !== subscribedStaffId) return;
+
+    if (currentUser.role === 'executive') {
+        loadExecutiveRequests();
+        loadExecutiveReport();
+    } else {
+        loadStaffLeaveHistory();
+    }
 }
 
 function stopRealtimeSubscriptions() {
@@ -265,31 +278,72 @@ async function loadExecutiveRequests() {
         });
     }
 
-    // ดึงข้อมูลทั้งหมดโดยไม่ใช้ .order() เพื่อป้องกัน Error เรื่องชื่อคอลัมน์
-    const { data, error } = await supabaseClient
-        .from('leave_requests')
-        .select('*');
+    const [
+        { data: offCampusRequests, error: offCampusError },
+        { data: leaveApplications, error: leaveApplicationError }
+    ] = await Promise.all([
+        supabaseClient.from('leave_requests').select('*'),
+        supabaseClient.from('leave_applications').select('*')
+    ]);
 
     const tbody = document.getElementById('exec-requests-list');
     tbody.innerHTML = '';
 
-    if (error) {
-        console.error('Error loading leave requests:', error);
+    if (offCampusError) {
+        console.error('Error loading off-campus requests:', offCampusError);
         tbody.innerHTML = `<tr><td colspan="6" class="py-4 px-4 text-center text-rose-600">โหลดรายการคำขอไม่สำเร็จ กรุณาลองใหม่</td></tr>`;
         return;
     }
+    if (leaveApplicationError) {
+        console.error('Error loading leave applications:', leaveApplicationError);
+    }
 
-    let pendingCount = 0;
+    const requests = [
+        ...(offCampusRequests || []).map(row => ({ ...row, request_kind: 'off_campus' })),
+        ...(leaveApplications || []).map(row => ({
+            ...row,
+            request_kind: 'leave_application',
+            leave_date: row.start_date,
+            leave_end_date: row.end_date,
+            time_range: 'ลาเต็มวัน',
+            subject: null,
+            period: null,
+            substitute_teacher: null
+        }))
+    ];
 
-    if (data && data.length > 0) {
-        // กลับด้านข้อมูล (Reverse) ให้รายการที่ถูกเพิ่มเข้ามาล่าสุดอยู่บนสุด
-        const reversedData = [...data].reverse();
+    if (requests.length > 0) {
+        const newestFirst = requests
+            .map((row, index) => ({ row, index, createdAt: Date.parse(row.created_at || '') }))
+            .sort((a, b) => {
+                const aHasTimestamp = Number.isFinite(a.createdAt);
+                const bHasTimestamp = Number.isFinite(b.createdAt);
+                if (aHasTimestamp && bHasTimestamp && a.createdAt !== b.createdAt) {
+                    return b.createdAt - a.createdAt;
+                }
+                if (aHasTimestamp !== bHasTimestamp) {
+                    return aHasTimestamp ? -1 : 1;
+                }
+                return b.index - a.index;
+            })
+            .map(({ row }) => row);
 
-        reversedData.forEach(row => {
-            if(row.status === 'รออนุมัติ') pendingCount++;
+        const pendingRequests = newestFirst.filter(row => row.status === 'รออนุมัติ');
+        const approvedRequests = newestFirst.filter(row => row.status === 'อนุมัติ');
+        const rejectedRequests = newestFirst.filter(row => row.status === 'ไม่อนุมัติ');
+        const otherRequests = newestFirst.filter(row =>
+            !['รออนุมัติ', 'อนุมัติ', 'ไม่อนุมัติ'].includes(row.status)
+        );
 
+        const renderRequestRow = row => {
             const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อผู้ใช้';
-            const substituteText = row.substitute_teacher 
+            const requestLabel = row.request_kind === 'leave_application'
+                ? `ลาป่วย/ลากิจ · ${row.leave_type}`
+                : 'ออกนอกสถานศึกษา / ไปราชการ';
+            const requestedDate = row.request_kind === 'leave_application'
+                ? `${row.leave_date}${row.leave_end_date !== row.leave_date ? ` ถึง ${row.leave_end_date}` : ''}<br><span class="text-xs text-slate-400">ลาเต็มวัน</span>`
+                : `${row.leave_date}<br><span class="text-xs text-slate-400">${row.time_range}</span>`;
+            const substituteText = row.substitute_teacher
                 ? `<span class="text-xs text-slate-700 font-medium">วิชา: ${row.subject || '-'} (${row.period || '-'})<br>ผู้สอนแทน: ${row.substitute_teacher}</span>`
                 : `<span class="text-xs text-slate-400">ไม่มีการฝากคาบ</span>`;
 
@@ -301,42 +355,70 @@ async function loadExecutiveRequests() {
             if (row.status === 'รออนุมัติ') {
                 actionBtns = `
                     <div class="flex justify-center gap-2">
-                        <button onclick="updateLeaveStatus('${row.id}', 'อนุมัติ')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition">อนุมัติ</button>
-                        <button onclick="updateLeaveStatus('${row.id}', 'ไม่อนุมัติ')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-xs transition">ไม่อนุมัติ</button>
+                        <button onclick="updateLeaveStatus('${row.id}', 'อนุมัติ', '${row.request_kind}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition">อนุมัติ</button>
+                        <button onclick="updateLeaveStatus('${row.id}', 'ไม่อนุมัติ', '${row.request_kind}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-xs transition">ไม่อนุมัติ</button>
                     </div>
                 `;
             }
 
-            tbody.innerHTML += `
+            return `
                 <tr class="hover:bg-slate-50/50 transition">
                     <td class="py-4 px-4">
                         <div class="font-medium text-slate-800">${staffName}</div>
                         <div class="text-xs text-slate-400">รหัส: ${row.staff_id}</div>
                     </td>
-                    <td class="py-4 px-4 text-slate-600">${row.reason}</td>
-                    <td class="py-4 px-4 text-slate-600">${row.leave_date}<br><span class="text-xs text-slate-400">${row.time_range}</span></td>
+                    <td class="py-4 px-4 text-slate-600"><span class="inline-block mb-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${row.request_kind === 'leave_application' ? 'bg-sky-50 text-sky-700' : 'bg-violet-50 text-violet-700'}">${requestLabel}</span><br>${row.reason}</td>
+                    <td class="py-4 px-4 text-slate-600">${requestedDate}</td>
                     <td class="py-4 px-4">${substituteText}</td>
                     <td class="py-4 px-4"><span class="px-2.5 py-1 ${statusBadge} rounded-full text-xs font-medium">${row.status}</span></td>
                     <td class="py-4 px-4 text-center">${actionBtns}</td>
                 </tr>
             `;
-        });
+        };
+
+        const renderRequestSection = (title, requests, emptyText, headingClass) => `
+            <tr class="${headingClass}">
+                <td colspan="6" class="py-3 px-4 font-bold">${title} <span class="text-xs font-medium">(${requests.length} รายการ)</span></td>
+            </tr>
+            ${requests.length ? requests.map(renderRequestRow).join('') : `
+                <tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">${emptyText}</td></tr>
+            `}
+        `;
+
+        tbody.innerHTML = [
+            renderRequestSection('คำขอใหม่ รอพิจารณา', pendingRequests, 'ไม่มีคำขอที่รอพิจารณา', 'bg-amber-50 text-amber-800'),
+            renderRequestSection('คำขอที่อนุมัติแล้ว', approvedRequests, 'ยังไม่มีคำขอที่อนุมัติแล้ว', 'bg-emerald-50 text-emerald-800'),
+            renderRequestSection('คำขอที่ไม่อนุมัติ', rejectedRequests, 'ไม่มีคำขอที่ไม่อนุมัติ', 'bg-rose-50 text-rose-800'),
+            ...(otherRequests.length ? [
+                renderRequestSection('สถานะอื่น', otherRequests, '', 'bg-slate-100 text-slate-700')
+            ] : []),
+            ...(leaveApplicationError ? [
+                '<tr><td colspan="6" class="py-3 px-4 text-center text-amber-700 bg-amber-50">โหลดคำร้องลาป่วย/ลากิจไม่ได้ ตรวจสอบว่าได้รัน migration และตั้งค่าสิทธิ์ตาราง leave_applications ใน Supabase แล้ว</td></tr>'
+            ] : [])
+        ].join('');
+
+        document.getElementById('exec-pending-count').innerHTML = `${pendingRequests.length} <span class="text-xs font-normal text-rose-600">รายการ</span>`;
     } else {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">ยังไม่มีรายการคำขอในระบบ</td></tr>`;
+        tbody.innerHTML = leaveApplicationError
+            ? '<tr><td colspan="6" class="py-4 px-4 text-center text-amber-700 bg-amber-50">โหลดคำร้องลาป่วย/ลากิจไม่ได้ ตรวจสอบว่าได้รัน migration และตั้งค่าสิทธิ์ตาราง leave_applications ใน Supabase แล้ว</td></tr><tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">ยังไม่มีคำขอออกนอกสถานศึกษา</td></tr>'
+            : `<tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">ยังไม่มีรายการคำขอในระบบ</td></tr>`;
+        document.getElementById('exec-pending-count').innerHTML = `0 <span class="text-xs font-normal text-rose-600">รายการ</span>`;
     }
 
-    document.getElementById('exec-pending-count').innerHTML = `${pendingCount} <span class="text-xs font-normal text-rose-600">รายการ</span>`;
-    document.getElementById('stat-leave').innerHTML = `${data ? data.length : 0} <span class="text-sm font-normal text-rose-600">รายการ</span>`;
+    document.getElementById('stat-leave').innerHTML = `${requests.length} <span class="text-sm font-normal text-rose-600">รายการ</span>`;
 }
 
 // ผู้บริหารอัปเดตสถานะคำขอ
-async function updateLeaveStatus(id, newStatus) {
-    const { error } = await supabaseClient
-        .from('leave_requests')
+async function updateLeaveStatus(id, newStatus, requestKind = 'off_campus') {
+    const table = requestKind === 'leave_application' ? 'leave_applications' : 'leave_requests';
+    const { data, error } = await supabaseClient
+        .from(table)
         .update({ status: newStatus })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
 
-    if (error) {
+    if (error || !data?.length) {
+        if (error) console.error('Error updating request status:', error);
         showNotification('อัปเดตสถานะไม่สำเร็จ', 'error');
     } else {
         showNotification(`อัปเดตสถานะเป็น "${newStatus}" เรียบร้อยแล้ว ระบบได้ส่งการแจ้งเตือน Real-time ให้บุคลากรทราบ`);
@@ -775,58 +857,130 @@ async function submitLeave(event) {
 
     document.getElementById('leave-timerange').value = timeRange;
 
+    try {
+        const { error } = await supabaseClient
+            .from('leave_requests')
+            .insert([{
+                staff_id: currentUser.staff_id,
+                reason: reason,
+                leave_date: leaveDate,
+                time_range: timeRange,
+                subject: subject,
+                period: period,
+                substitute_teacher: substitute,
+                status: 'รออนุมัติ'
+            }]);
+
+        if (error) {
+            console.error('Error submitting off-campus request:', error);
+            const errorCode = error.code ? ` (${error.code})` : '';
+            showNotification(`ส่งคำขอไม่สำเร็จ: ${error.message || 'เกิดข้อผิดพลาดจากฐานข้อมูล'}${errorCode}`, 'error');
+            return;
+        }
+    } catch (error) {
+        console.error('Unexpected error submitting off-campus request:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        showNotification(`เชื่อมต่อฐานข้อมูลไม่สำเร็จ: ${message}`, 'error');
+        return;
+    }
+
+    showNotification('ยื่นคำขออนุมัติเรียบร้อยแล้ว');
+    document.getElementById('leave-reason').value = '';
+    document.getElementById('leave-date').value = '';
+    resetLeaveTimePickers();
+    document.getElementById('leave-timerange').value = '';
+    document.getElementById('leave-subject').value = '';
+    document.getElementById('leave-period').value = '';
+    document.getElementById('leave-substitute').value = '';
+
+    loadStaffLeaveHistory();
+}
+
+async function submitLeaveApplication(event) {
+    event.preventDefault();
+    const leaveType = document.getElementById('leave-application-type').value;
+    const startDate = document.getElementById('leave-application-start-date').value;
+    const endDate = document.getElementById('leave-application-end-date').value;
+    const reason = document.getElementById('leave-application-reason').value.trim();
+
+    if (endDate < startDate) {
+        showNotification('วันสิ้นสุดการลาต้องไม่อยู่ก่อนวันเริ่มลา', 'error');
+        return;
+    }
+
     const { error } = await supabaseClient
-        .from('leave_requests')
+        .from('leave_applications')
         .insert([{
             staff_id: currentUser.staff_id,
-            reason: reason,
-            leave_date: leaveDate,
-            time_range: timeRange,
-            subject: subject,
-            period: period,
-            substitute_teacher: substitute,
+            leave_type: leaveType,
+            start_date: startDate,
+            end_date: endDate,
+            reason,
             status: 'รออนุมัติ'
         }]);
 
     if (error) {
-        showNotification('เกิดข้อผิดพลาดในการส่งคำขอ', 'error');
-    } else {
-        showNotification('ยื่นคำขออนุมัติเรียบร้อยแล้ว');
-        document.getElementById('leave-reason').value = '';
-        document.getElementById('leave-date').value = '';
-        resetLeaveTimePickers();
-        document.getElementById('leave-timerange').value = '';
-        document.getElementById('leave-subject').value = '';
-        document.getElementById('leave-period').value = '';
-        document.getElementById('leave-substitute').value = '';
-        
-        loadStaffLeaveHistory(); // โหลดตารางประวัติคำขอของตนเองซ้ำให้อัปเดตทันที
+        console.error('Error submitting leave application:', error);
+        showNotification('ส่งคำร้องลาไม่สำเร็จ กรุณาตรวจสอบการตั้งค่าฐานข้อมูลและลองใหม่', 'error');
+        return;
     }
+
+    showNotification('ยื่นคำร้องลาเรียบร้อยแล้ว');
+    document.getElementById('leave-application-start-date').value = '';
+    document.getElementById('leave-application-end-date').value = '';
+    document.getElementById('leave-application-reason').value = '';
+    loadStaffLeaveHistory();
 }
 
 // 5. โหลดประวัติและสถานะการอนุมัติของ Staff แต่ละท่าน
 async function loadStaffLeaveHistory() {
     if (!currentUser || !['staff', 'hr'].includes(currentUser.role)) return;
+    const loadId = ++staffLeaveHistoryLoadId;
     const staffId = currentUser.staff_id;
     const tbody = document.getElementById('staff-leave-history');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const { data, error } = await supabaseClient
-        .from('leave_requests')
-        .select('*')
-        .eq('staff_id', staffId)
-        .order('leave_date', { ascending: false });
+    const [
+        { data: offCampusRequests, error: offCampusError },
+        { data: leaveApplications, error: leaveApplicationError }
+    ] = await Promise.all([
+        supabaseClient.from('leave_requests').select('*').eq('staff_id', staffId),
+        supabaseClient.from('leave_applications').select('*').eq('staff_id', staffId)
+    ]);
 
-    if (currentUser?.staff_id !== staffId) return;
-    if (error) {
-        console.error('Error loading personal leave requests:', error);
+    if (loadId !== staffLeaveHistoryLoadId || currentUser?.staff_id !== staffId) return;
+    if (offCampusError) {
+        console.error('Error loading personal off-campus requests:', offCampusError);
         tbody.innerHTML = '<tr><td colspan="4" class="py-4 px-4 text-center text-rose-600">โหลดประวัติคำขอไม่สำเร็จ กรุณาลองใหม่</td></tr>';
         return;
     }
+    if (leaveApplicationError) {
+        console.error('Error loading personal leave applications:', leaveApplicationError);
+    }
 
-    if (data && data.length > 0) {
-        data.forEach(row => {
+    const requests = [
+        ...(offCampusRequests || []).map(row => ({ ...row, request_kind: 'off_campus' })),
+        ...(leaveApplications || []).map(row => ({
+            ...row,
+            request_kind: 'leave_application',
+            leave_date: row.start_date,
+            leave_end_date: row.end_date,
+            time_range: 'ลาเต็มวัน',
+            subject: null,
+            substitute_teacher: null
+        }))
+    ].sort((a, b) => {
+        const aCreatedAt = Date.parse(a.created_at || '');
+        const bCreatedAt = Date.parse(b.created_at || '');
+        if (Number.isFinite(aCreatedAt) && Number.isFinite(bCreatedAt) && aCreatedAt !== bCreatedAt) {
+            return bCreatedAt - aCreatedAt;
+        }
+        return b.leave_date.localeCompare(a.leave_date);
+    });
+
+    if (requests.length > 0) {
+        tbody.innerHTML = requests.map(row => {
             let statusBadge = 'bg-amber-50 text-amber-700 border border-amber-200';
             let statusText = '🟡 รอผู้บริหารพิจารณา';
 
@@ -838,19 +992,28 @@ async function loadStaffLeaveHistory() {
                 statusText = '🔴 ไม่อนุมัติ';
             }
 
+            const isLeaveApplication = row.request_kind === 'leave_application';
+            const requestLabel = isLeaveApplication
+                ? `ลาป่วย/ลากิจ · ${row.leave_type}`
+                : 'ออกนอกสถานศึกษา / ไปราชการ';
+            const dateText = isLeaveApplication
+                ? `${row.leave_date}${row.leave_end_date !== row.leave_date ? ` ถึง ${row.leave_end_date}` : ''}<br><span class="text-xs text-slate-400">ลาเต็มวัน</span>`
+                : `${row.leave_date}<br><span class="text-xs text-slate-400">${row.time_range}</span>`;
             const subText = row.substitute_teacher ? `${row.substitute_teacher} (${row.subject || '-'})` : '-';
 
-            tbody.innerHTML += `
+            return `
                 <tr class="hover:bg-slate-50/50 transition">
-                    <td class="py-4 px-4 font-medium text-slate-700">${row.leave_date}<br><span class="text-xs text-slate-400">${row.time_range}</span></td>
+                    <td class="py-4 px-4 font-medium text-slate-700"><span class="text-xs text-slate-500">${requestLabel}</span><br>${dateText}</td>
                     <td class="py-4 px-4 text-slate-600">${row.reason}</td>
                     <td class="py-4 px-4 text-slate-600">${subText}</td>
                     <td class="py-4 px-4"><span class="px-3 py-1 ${statusBadge} rounded-full text-xs font-semibold">${statusText}</span></td>
                 </tr>
             `;
-        });
+        }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ยังไม่มีประวัติการยื่นคำขอ</td></tr>`;
+        tbody.innerHTML = leaveApplicationError
+            ? '<tr><td colspan="4" class="py-4 px-4 text-center text-amber-700 bg-amber-50">โหลดคำร้องลาป่วย/ลากิจไม่ได้ ตรวจสอบว่าได้รัน migration และตั้งค่าสิทธิ์ตาราง leave_applications ใน Supabase แล้ว</td></tr><tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ยังไม่มีประวัติคำขอออกนอกสถานศึกษา</td></tr>'
+            : `<tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ยังไม่มีประวัติการยื่นคำขอ</td></tr>`;
     }
 }
 
@@ -872,20 +1035,38 @@ async function loadExecutiveReport() {
             .from('leave_requests')
             .select('*');
 
+        const { data: leaveApplications, error: leaveApplicationError } = await supabaseClient
+            .from('leave_applications')
+            .select('staff_id');
+
+        if (staffError || logsError || leaveError || leaveApplicationError) {
+            console.error('Error loading executive report data:', {
+                staffError,
+                logsError,
+                leaveError,
+                leaveApplicationError
+            });
+            showNotification('โหลดข้อมูลรายงานไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองใหม่', 'error');
+            return;
+        }
+
         const tbody = document.getElementById('individual-report-list');
         if (!tbody) return;
         tbody.innerHTML = '';
 
         let totalOnTime = 0;
         let totalLate = 0;
-        let totalLeave = leaveList ? leaveList.length : 0;
+        let totalLeave = (leaveList?.length || 0) + (leaveApplications?.length || 0);
         let reportStaffCount = 0;
 
         if (staffList && staffList.length > 0) {
             staffList.forEach(person => {
                 // กรองสถิติของแต่ละคน
                 const personLogs = logsList ? logsList.filter(l => l.staff_id === person.staff_id) : [];
-                const personLeaves = leaveList ? leaveList.filter(lv => lv.staff_id === person.staff_id) : [];
+                const personLeaves = [
+                    ...(leaveList || []).filter(lv => lv.staff_id === person.staff_id),
+                    ...(leaveApplications || []).filter(lv => lv.staff_id === person.staff_id)
+                ];
 
                 let onTimeCount = personLogs.filter(l => l.status === 'มาตรงเวลา').length;
                 let lateCount = personLogs.filter(l => l.status === 'มาสาย').length;

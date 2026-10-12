@@ -142,7 +142,7 @@
                 <button onclick="switchTab('hr-management')" id="tab-hr-management"
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
                 <button onclick="switchTab('leave')" id="tab-leave"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ยื่นคำขอออกนอกสถานศึกษา</button>
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">คำร้องลา / ขอออกนอกสถานศึกษา</button>
                 <button onclick="switchTab('report')" id="tab-report"
                     class="px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">สรุปสถิติ & รายงานประเมิน 6 เดือน</button>
             </div>
@@ -175,7 +175,7 @@
                 <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60">
                     <div class="flex justify-between items-center mb-6">
                         <div>
-                            <h3 class="text-base font-bold text-slate-800">ศูนย์พิจารณาอนุมัติคำขอออกนอกสถานศึกษา /
+                            <h3 class="text-base font-bold text-slate-800">ศูนย์พิจารณาอนุมัติคำร้องลา / คำขอออกนอกสถานศึกษา /
                                 ไปราชการ</h3>
                             <p class="text-xs text-slate-500">
                                 ตรวจสอบข้อมูลการปฏิบัติราชการและการฝากคาบสอน</p>
@@ -307,8 +307,43 @@
                 </div>
             </div>
 
-            <!-- TAB STAFF: ยื่นคำขอออกนอกสถานศึกษา พร้อมประวัติสถานะ Real-time -->
+            <!-- TAB STAFF: ยื่นคำร้องลาและคำขอออกนอกสถานศึกษา พร้อมประวัติสถานะ -->
             <div id="content-leave" class="hidden space-y-6">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
+                    <h3 class="text-lg font-bold text-slate-800 mb-1">แบบฟอร์มยื่นคำร้องลาป่วย / ลากิจ</h3>
+                    <p class="text-sm text-slate-500 mb-5">เลือกประเภทลาและวันที่ลา ระบบจะส่งคำร้องให้ผู้บริหารพิจารณา</p>
+                    <form onsubmit="submitLeaveApplication(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="leave-application-type" class="block text-xs font-semibold text-slate-600 mb-1">ประเภทการลา</label>
+                                <select id="leave-application-type" required
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                                    <option value="ลาป่วย">ลาป่วย</option>
+                                    <option value="ลากิจ">ลากิจ</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="leave-application-start-date" class="block text-xs font-semibold text-slate-600 mb-1">วันเริ่มลา</label>
+                                <input type="date" id="leave-application-start-date" required
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                            </div>
+                            <div>
+                                <label for="leave-application-end-date" class="block text-xs font-semibold text-slate-600 mb-1">วันสิ้นสุดการลา</label>
+                                <input type="date" id="leave-application-end-date" required
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="leave-application-reason" class="block text-xs font-semibold text-slate-600 mb-1">เหตุผลการลา</label>
+                            <textarea id="leave-application-reason" rows="3" required
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                placeholder="ระบุเหตุผลการลา..."></textarea>
+                        </div>
+                        <button type="submit"
+                            class="px-6 py-3 bg-rose-900 hover:bg-rose-950 text-white font-semibold rounded-xl text-sm shadow-sm transition">ยื่นคำร้องลา</button>
+                    </form>
+                </div>
+
                 <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">แบบฟอร์มยื่นคำขอออกนอกสถานศึกษา / ไปราชการ</h3>
                     <form onsubmit="submitLeave(event)" class="space-y-4">
@@ -381,7 +416,7 @@
 
                     <!-- ตารางแสดงประวัติและสถานะการอนุมัติแบบ Real-time ของ Staff -->
                     <div class="mt-8 pt-6 border-t border-slate-100">
-                        <h4 class="text-base font-bold text-slate-800 mb-4">ประวัติและสถานะการขออนุมัติของคุณ</h4>
+                        <h4 class="text-base font-bold text-slate-800 mb-4">ประวัติคำร้องลาและคำขอออกนอกสถานศึกษาของคุณ</h4>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead>
