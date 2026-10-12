@@ -3,6 +3,67 @@ body {
     font-family: 'Sarabun', sans-serif;
 }
 
+.notification-toast {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 100;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: min(24rem, calc(100vw - 2rem));
+    padding: 1rem;
+    border: 1px solid;
+    border-radius: 1rem;
+    background: white;
+    box-shadow: 0 12px 32px rgb(15 23 42 / 16%);
+    animation: notification-toast-enter 180ms ease-out;
+}
+
+.notification-toast.hidden {
+    display: none;
+}
+
+.notification-toast-success {
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.notification-toast-error {
+    border-color: #fecdd3;
+    color: #9f1239;
+}
+
+.notification-toast-icon {
+    flex: 0 0 auto;
+    width: 0.625rem;
+    height: 0.625rem;
+    margin-top: 0.375rem;
+    border-radius: 9999px;
+    background: currentColor;
+}
+
+.notification-toast-close {
+    flex: 0 0 auto;
+    margin: -0.375rem -0.375rem 0 0;
+    padding: 0 0.25rem;
+    color: #64748b;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+@keyframes notification-toast-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-0.5rem);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* เพิ่มแอนิเมชันหรือปรับแต่ง scrollbar เพิ่มเติมได้ที่นี่ */
 ::-webkit-scrollbar {
     width: 6px;

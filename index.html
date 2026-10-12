@@ -14,6 +14,16 @@
 
 <body class="bg-slate-50 text-slate-700 antialiased">
 
+    <div id="notification-toast" class="notification-toast hidden" role="status" aria-live="polite" aria-atomic="true">
+        <div class="notification-toast-icon" aria-hidden="true"></div>
+        <div class="min-w-0 flex-1">
+            <p id="notification-toast-title" class="text-sm font-bold"></p>
+            <p id="notification-toast-message" class="mt-0.5 text-sm"></p>
+        </div>
+        <button type="button" onclick="dismissNotification()" aria-label="ปิดการแจ้งเตือน"
+            class="notification-toast-close">&times;</button>
+    </div>
+
     <!-- 1. หน้า Login เข้าสู่ระบบ -->
     <div id="login-section"
         class="flex items-center justify-center min-h-screen bg-gradient-to-br from-rose-900 to-red-950 p-4">
@@ -243,6 +253,41 @@
                     </div>
                 </div>
 
+                <div id="checkin-camera-modal" class="hidden fixed inset-0 z-50 bg-slate-950/70 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="checkin-modal-title">
+                    <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden">
+                        <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
+                            <div>
+                                <h3 id="checkin-modal-title" class="text-lg font-bold text-slate-800">ยืนยันการลงเวลาเข้างาน</h3>
+                                <p id="checkin-location-status" class="mt-1 text-sm text-slate-500">กำลังตรวจสอบตำแหน่งโรงเรียน...</p>
+                            </div>
+                            <button type="button" onclick="closeCheckInModal()" aria-label="ปิดหน้าต่าง"
+                                class="w-9 h-9 rounded-xl text-slate-500 hover:bg-slate-100 text-xl leading-none">&times;</button>
+                        </div>
+                        <div class="p-5 space-y-4">
+                            <div class="rounded-2xl overflow-hidden bg-slate-950 aspect-video flex items-center justify-center">
+                                <video id="checkin-camera-video" class="hidden w-full h-full object-cover" autoplay playsinline muted></video>
+                                <img id="checkin-camera-photo" class="hidden w-full h-full object-cover" alt="ภาพถ่ายยืนยันการลงเวลา">
+                                <canvas id="checkin-camera-canvas" class="hidden"></canvas>
+                                <p id="checkin-camera-placeholder" class="px-6 text-center text-sm text-slate-300">อนุญาตการเข้าถึงกล้องเพื่อถ่ายภาพยืนยัน<br>ระบบไม่จัดเก็บภาพถ่าย</p>
+                            </div>
+                            <p class="text-xs text-slate-500">ระบบตรวจพิกัดในรัศมี 3 กิโลเมตรจากโรงเรียน(เทสเป็นมอศิลก่อน) · ต้องถ่ายภาพยืนยันการลงเวลา</p>
+                            <div id="checkin-camera-error" class="hidden p-3 rounded-xl bg-rose-50 text-rose-700 text-sm" role="alert"></div>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" onclick="closeCheckInModal()"
+                                    class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">ยกเลิก</button>
+                                <button id="checkin-capture-button" type="button" onclick="captureCheckInPhoto()"
+                                    class="hidden px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-rose-950 font-semibold text-sm">ถ่ายภาพ</button>
+                                <label id="checkin-photo-fallback" class="hidden px-4 py-2.5 rounded-xl border border-amber-300 text-amber-900 font-semibold text-sm hover:bg-amber-50 cursor-pointer">
+                                    ถ่าย/เลือกรูปจากอุปกรณ์
+                                    <input id="checkin-photo-input" type="file" accept="image/*" capture="user" class="hidden" onchange="useCheckInPhoto(event)">
+                                </label>
+                                <button id="checkin-confirm-button" type="button" onclick="confirmCheckIn()"
+                                    class="hidden px-4 py-2.5 rounded-xl bg-rose-900 hover:bg-rose-950 text-white font-semibold text-sm">ยืนยันและบันทึกเวลา</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60">
                     <h3 class="text-base font-bold text-slate-800 mb-4">ประวัติการมาปฏิบัติงานของคุณ</h3>
                     <div class="overflow-x-auto">
@@ -408,6 +453,7 @@
     </div>
 
     <script src="app.js"></script>
+
 </body>
 
 </html>

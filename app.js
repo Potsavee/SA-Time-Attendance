@@ -7,6 +7,31 @@ document.getElementById('current-date').innerText = "วันที่ปัจ
 
 const DEFAULT_LEAVE_START_TIME = '08:00';
 const DEFAULT_LEAVE_RETURN_TIME = '08:30';
+const SCHOOL_LOCATION = { latitude: 13.816907, longitude: 100.039916 };
+const SCHOOL_GEOFENCE_RADIUS_METERS = 3000;
+let checkInCameraStream = null;
+let checkInLocationVerified = false;
+let checkInCameraReady = false;
+let attendanceScanType = 'check_in';
+let notificationTimeout = null;
+
+function showNotification(message, type = 'success') {
+    const toast = document.getElementById('notification-toast');
+    const isError = type === 'error';
+    toast.classList.remove('hidden', 'notification-toast-success', 'notification-toast-error');
+    toast.classList.add(isError ? 'notification-toast-error' : 'notification-toast-success');
+    document.getElementById('notification-toast-title').textContent = isError ? 'เกิดข้อผิดพลาด' : 'สำเร็จ';
+    document.getElementById('notification-toast-message').textContent = message;
+
+    clearTimeout(notificationTimeout);
+    notificationTimeout = setTimeout(dismissNotification, 6000);
+}
+
+function dismissNotification() {
+    document.getElementById('notification-toast').classList.add('hidden');
+    clearTimeout(notificationTimeout);
+    notificationTimeout = null;
+}
 
 function initializeLeaveTimePickers() {
     const startSelect = document.getElementById('leave-time-out');
@@ -79,6 +104,7 @@ async function handleLogin(event) {
 
         currentUser = data[0];
         errorBox.classList.add('hidden');
+        document.getElementById('staff-leave-history').innerHTML = '';
 
         document.getElementById('login-section').classList.add('hidden');
         document.getElementById('app-section').classList.remove('hidden');
@@ -110,6 +136,7 @@ async function handleLogin(event) {
             switchTab('checkin');
             loadHrAttendanceLogs();
             loadAttendanceHistory();
+            loadStaffLeaveHistory();
         } else {
             roleText = 'ครูและบุคลากรทางการศึกษา';
             tabExec.classList.add('hidden');
@@ -132,6 +159,7 @@ async function handleLogin(event) {
 
 function handleLogout() {
     currentUser = null;
+    document.getElementById('staff-leave-history').innerHTML = '';
     document.getElementById('app-section').classList.add('hidden');
     document.getElementById('login-section').classList.remove('hidden');
     document.getElementById('user-id').value = '';
@@ -160,7 +188,6 @@ function switchTab(tabName) {
     }
 }
 
-// 1. ผู้บริหารโหลดคำขอทั้งหมด
 // 1. ผู้บริหารโหลดคำขอทั้งหมด
 async function loadExecutiveRequests() {
     const { data: staffData, error: staffError } = await supabaseClient
@@ -246,9 +273,9 @@ async function updateLeaveStatus(id, newStatus) {
         .eq('id', id);
 
     if (error) {
-        alert('อัปเดตสถานะไม่สำเร็จ');
+        showNotification('อัปเดตสถานะไม่สำเร็จ', 'error');
     } else {
-        alert(`อัปเดตสถานะเป็น "${newStatus}" เรียบร้อยแล้ว ระบบได้ส่งการแจ้งเตือน Real-time ให้บุคลากรทราบ`);
+        showNotification(`อัปเดตสถานะเป็น "${newStatus}" เรียบร้อยแล้ว ระบบได้ส่งการแจ้งเตือน Real-time ให้บุคลากรทราบ`);
         loadExecutiveRequests();
     }
 }
@@ -310,37 +337,286 @@ function filterHrTable() {
 
 // 3. บันทึกเวลาเข้างาน
 async function recordCheckIn() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const status = (hours > 8 || (hours === 8 && minutes > 0)) ? 'มาสาย' : 'มาตรงเวลา';
+    await startAttendanceScan('check_in');
+}
 
-    const { error } = await supabaseClient
-        .from('attendance_logs')
-        .insert([{ staff_id: currentUser.staff_id, check_in: now.toISOString(), status }]);
+async function recordCheckOut() {
+    await startAttendanceScan('check_out');
+}
 
-    if (error) {
-        alert('เกิดข้อผิดพลาดในการบันทึกเวลา');
-    } else {
-        alert(`บันทึกเวลาเข้างานสำเร็จ (${status})`);
-        loadAttendanceHistory();
+async function startAttendanceScan(scanType) {
+    const modal = document.getElementById('checkin-camera-modal');
+    const locationStatus = document.getElementById('checkin-location-status');
+    const errorBox = document.getElementById('checkin-camera-error');
+    attendanceScanType = scanType;
+    modal.classList.remove('hidden');
+    errorBox.classList.add('hidden');
+    locationStatus.textContent = 'กำลังตรวจสอบตำแหน่งโรงเรียน...';
+    document.getElementById('checkin-modal-title').textContent =
+        scanType === 'check_in' ? 'ยืนยันการลงเวลาเข้างาน' : 'ยืนยันการลงเวลาออกงาน';
+    document.getElementById('checkin-confirm-button').textContent =
+        scanType === 'check_in' ? 'ยืนยันและบันทึกเวลาเข้า' : 'ยืนยันและบันทึกเวลาออก';
+    checkInLocationVerified = false;
+    checkInCameraReady = false;
+    document.getElementById('checkin-capture-button').classList.add('hidden');
+    document.getElementById('checkin-photo-fallback').classList.add('hidden');
+    document.getElementById('checkin-confirm-button').classList.add('hidden');
+
+    // Request camera access while the click still has user activation; some browsers
+    // reject getUserMedia if it is only called after awaiting GPS.
+    const cameraPromise = startCheckInCamera();
+
+    try {
+        if (!SCHOOL_LOCATION) {
+            checkInLocationVerified = true;
+            locationStatus.textContent = 'ยังไม่ได้กำหนดพิกัดโรงเรียน — ปิดตรวจ GPS ชั่วคราว';
+            await cameraPromise;
+            if (checkInCameraReady) {
+                document.getElementById('checkin-capture-button').classList.remove('hidden');
+            } else {
+                document.getElementById('checkin-photo-fallback').classList.remove('hidden');
+            }
+            return;
+        }
+
+        if (!navigator.geolocation) {
+            stopCheckInCamera();
+            showCheckInError('เบราว์เซอร์นี้ไม่รองรับการตรวจสอบตำแหน่ง');
+            return;
+        }
+
+        const position = await getCurrentPosition();
+        const distance = getDistanceInMeters(
+            position.coords.latitude,
+            position.coords.longitude,
+            SCHOOL_LOCATION.latitude,
+            SCHOOL_LOCATION.longitude
+        );
+        const accuracy = position.coords.accuracy;
+
+        if (distance > SCHOOL_GEOFENCE_RADIUS_METERS) {
+            locationStatus.textContent = `อยู่นอกเขตโรงเรียน (${Math.round(distance)} เมตรจากจุดที่กำหนด)`;
+            showCheckInError('ต้องอยู่ภายในรัศมี 3 กิโลเมตรจากโรงเรียนจึงจะลงเวลาได้');
+            stopCheckInCamera();
+            return;
+        }
+
+        if (accuracy > SCHOOL_GEOFENCE_RADIUS_METERS) {
+            locationStatus.textContent = `ตำแหน่งคลาดเคลื่อนประมาณ ${Math.round(accuracy)} เมตร`;
+            showCheckInError('ความแม่นยำ GPS ยังไม่เพียงพอ กรุณาเปิดตำแหน่งที่แม่นยำแล้วลองอีกครั้ง');
+            stopCheckInCamera();
+            return;
+        }
+
+        if (distance + accuracy > SCHOOL_GEOFENCE_RADIUS_METERS) {
+            locationStatus.textContent = `อยู่ใกล้ขอบเขตโรงเรียน ห่าง ${Math.round(distance)} เมตร (ความแม่นยำ ±${Math.round(accuracy)} เมตร)`;
+            showCheckInError('GPS ยังยืนยันไม่ได้ว่าอยู่ภายในเขตโรงเรียน กรุณาขยับเข้าใกล้อาคารแล้วลองอีกครั้ง');
+            stopCheckInCamera();
+            return;
+        }
+
+        checkInLocationVerified = true;
+        locationStatus.textContent = `อยู่ในเขตโรงเรียน ห่าง ${Math.round(distance)} เมตร (ความแม่นยำ ±${Math.round(accuracy)} เมตร)`;
+        await cameraPromise;
+        if (checkInCameraReady) {
+            document.getElementById('checkin-capture-button').classList.remove('hidden');
+        } else {
+            document.getElementById('checkin-photo-fallback').classList.remove('hidden');
+        }
+    } catch (error) {
+        stopCheckInCamera();
+        showCheckInError(error.message || 'ตรวจสอบตำแหน่งไม่สำเร็จ กรุณาอนุญาตการเข้าถึงตำแหน่งและลองอีกครั้ง');
     }
 }
 
-// บันทึกเวลาออกงาน
-async function recordCheckOut() {
-    const { error } = await supabaseClient
-        .from('attendance_logs')
-        .update({ check_out: new Date().toISOString() })
-        .eq('staff_id', currentUser.staff_id)
-        .is('check_out', null);
+function getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, error => {
+            const messages = {
+                1: 'ไม่ได้รับอนุญาตใช้ตำแหน่ง กรุณาอนุญาต Location ในการตั้งค่าเบราว์เซอร์',
+                2: 'อุปกรณ์ระบุตำแหน่งไม่ได้ กรุณาเปิด GPS/Wi-Fi แล้วลองอีกครั้ง',
+                3: 'ใช้เวลาตรวจตำแหน่งนานเกินไป กรุณาลองอีกครั้ง'
+            };
+            reject(new Error(messages[error.code] || 'ตรวจสอบตำแหน่งไม่สำเร็จ กรุณาลองอีกครั้ง'));
+        }, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+        });
+    });
+}
+
+function getDistanceInMeters(latitude1, longitude1, latitude2, longitude2) {
+    const toRadians = degrees => degrees * Math.PI / 180;
+    const latitudeDifference = toRadians(latitude2 - latitude1);
+    const longitudeDifference = toRadians(longitude2 - longitude1);
+    const haversine = Math.sin(latitudeDifference / 2) ** 2
+        + Math.cos(toRadians(latitude1))
+        * Math.cos(toRadians(latitude2))
+        * Math.sin(longitudeDifference / 2) ** 2;
+
+    return 6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+async function startCheckInCamera() {
+    const video = document.getElementById('checkin-camera-video');
+    const placeholder = document.getElementById('checkin-camera-placeholder');
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        showCheckInError('เปิดกล้องในหน้านี้ไม่ได้ (อาจต้องใช้ HTTPS หรือเบราว์เซอร์ไม่รองรับ) ใช้ปุ่มถ่าย/เลือกรูปจากอุปกรณ์แทนได้');
+        return;
+    }
+
+    try {
+        checkInCameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false
+        });
+        video.srcObject = checkInCameraStream;
+        await video.play();
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        checkInCameraReady = true;
+        if (checkInLocationVerified) {
+            document.getElementById('checkin-capture-button').classList.remove('hidden');
+        }
+    } catch (error) {
+        stopCheckInCamera();
+        const messages = {
+            NotAllowedError: 'เบราว์เซอร์หรือระบบปฏิบัติการไม่อนุญาตใช้กล้อง กรุณาเปิดสิทธิ์ Camera ในการตั้งค่าเว็บไซต์/อุปกรณ์',
+            NotFoundError: 'ไม่พบกล้องในอุปกรณ์นี้',
+            NotReadableError: 'กล้องกำลังถูกใช้งานโดยแอปอื่น กรุณาปิดแอปนั้นแล้วลองใหม่',
+            OverconstrainedError: 'ไม่สามารถเปิดกล้องหน้าตามที่ร้องขอได้ กรุณาใช้ปุ่มถ่าย/เลือกรูปจากอุปกรณ์',
+            SecurityError: 'เบราว์เซอร์บล็อกกล้อง กรุณาเปิดเว็บไซต์ผ่าน HTTPS แล้วลองใหม่'
+        };
+        showCheckInError(messages[error.name] || `เปิดกล้องไม่สำเร็จ (${error.name || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'}) ใช้ปุ่มถ่าย/เลือกรูปจากอุปกรณ์แทนได้`);
+    }
+}
+
+function captureCheckInPhoto() {
+    const video = document.getElementById('checkin-camera-video');
+    const canvas = document.getElementById('checkin-camera-canvas');
+    const photo = document.getElementById('checkin-camera-photo');
+
+    if (!video.videoWidth || !video.videoHeight) {
+        showCheckInError('กล้องยังไม่พร้อม กรุณารอสักครู่แล้วลองถ่ายใหม่');
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+        showCheckInError('เตรียมภาพถ่ายไม่สำเร็จ กรุณาลองอีกครั้ง');
+        return;
+    }
+    context.drawImage(video, 0, 0);
+    photo.src = canvas.toDataURL('image/jpeg', 0.8);
+    showCheckInPhoto();
+}
+
+function useCheckInPhoto(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        showCheckInError('กรุณาเลือกไฟล์รูปภาพ');
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        document.getElementById('checkin-camera-photo').src = reader.result;
+        showCheckInPhoto();
+        event.target.value = '';
+    };
+    reader.onerror = () => showCheckInError('อ่านรูปภาพไม่สำเร็จ กรุณาลองเลือกใหม่');
+    reader.readAsDataURL(file);
+}
+
+function showCheckInPhoto() {
+    const photo = document.getElementById('checkin-camera-photo');
+    photo.classList.remove('hidden');
+    document.getElementById('checkin-camera-video').classList.add('hidden');
+    stopCheckInCamera();
+    document.getElementById('checkin-capture-button').classList.add('hidden');
+    document.getElementById('checkin-photo-fallback').classList.add('hidden');
+    document.getElementById('checkin-confirm-button').classList.remove('hidden');
+    document.getElementById('checkin-location-status').textContent += ' · ถ่ายภาพแล้ว';
+}
+
+async function confirmCheckIn() {
+    const now = new Date();
+    let error;
+    let status;
+    let updatedRows;
+
+    if (attendanceScanType === 'check_in') {
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        status = (hours > 8 || (hours === 8 && minutes > 0)) ? 'มาสาย' : 'มาตรงเวลา';
+        ({ error } = await supabaseClient
+            .from('attendance_logs')
+            .insert([{ staff_id: currentUser.staff_id, check_in: now.toISOString(), status }]));
+    } else {
+        ({ data: updatedRows, error } = await supabaseClient
+            .from('attendance_logs')
+            .update({ check_out: now.toISOString() })
+            .eq('staff_id', currentUser.staff_id)
+            .is('check_out', null)
+            .select('check_in'));
+    }
 
     if (error) {
-        alert('ไม่พบรายการเข้างานที่ยังไม่ได้ลงเวลาออก');
-    } else {
-        alert('บันทึกเวลาออกงานสำเร็จ');
-        loadAttendanceHistory();
+        showCheckInError('เกิดข้อผิดพลาดในการบันทึกเวลา กรุณาลองอีกครั้ง');
+        return;
     }
+
+    if (attendanceScanType === 'check_out' && !updatedRows?.length) {
+        showCheckInError('ไม่พบรายการเข้างานที่ยังไม่ได้ลงเวลาออก');
+        return;
+    }
+
+    closeCheckInModal();
+    showNotification(attendanceScanType === 'check_in'
+        ? `บันทึกเวลาเข้างานสำเร็จ (${status})`
+        : 'บันทึกเวลาออกงานสำเร็จ');
+    loadAttendanceHistory();
+}
+
+function showCheckInError(message) {
+    const errorBox = document.getElementById('checkin-camera-error');
+    errorBox.textContent = message;
+    errorBox.classList.remove('hidden');
+}
+
+function stopCheckInCamera() {
+    if (checkInCameraStream) {
+        checkInCameraStream.getTracks().forEach(track => track.stop());
+        checkInCameraStream = null;
+    }
+}
+
+function closeCheckInModal() {
+    stopCheckInCamera();
+    checkInCameraReady = false;
+    checkInLocationVerified = false;
+    const video = document.getElementById('checkin-camera-video');
+    const photo = document.getElementById('checkin-camera-photo');
+    const canvas = document.getElementById('checkin-camera-canvas');
+    video.srcObject = null;
+    video.classList.add('hidden');
+    photo.removeAttribute('src');
+    photo.classList.add('hidden');
+    canvas.width = 0;
+    canvas.height = 0;
+    document.getElementById('checkin-camera-placeholder').classList.remove('hidden');
+    document.getElementById('checkin-capture-button').classList.add('hidden');
+    document.getElementById('checkin-photo-fallback').classList.add('hidden');
+    document.getElementById('checkin-confirm-button').classList.add('hidden');
+    document.getElementById('checkin-camera-error').classList.add('hidden');
+    document.getElementById('checkin-photo-input').value = '';
+    document.getElementById('checkin-camera-modal').classList.add('hidden');
 }
 
 async function loadAttendanceHistory() {
@@ -423,7 +699,7 @@ async function submitLeave(event) {
 
     const validation = validateLeaveTimeRange(startTime, endTime);
     if (!validation.valid) {
-        alert(validation.message);
+        showNotification(validation.message, 'error');
         return;
     }
 
@@ -443,9 +719,9 @@ async function submitLeave(event) {
         }]);
 
     if (error) {
-        alert('เกิดข้อผิดพลาดในการส่งคำขอ');
+        showNotification('เกิดข้อผิดพลาดในการส่งคำขอ', 'error');
     } else {
-        alert('ยื่นคำขออนุมัติไปยังฐานข้อมูลเรียบร้อยแล้ว');
+        showNotification('ยื่นคำขออนุมัติเรียบร้อยแล้ว');
         document.getElementById('leave-reason').value = '';
         document.getElementById('leave-date').value = '';
         resetLeaveTimePickers();
@@ -460,17 +736,24 @@ async function submitLeave(event) {
 
 // 5. โหลดประวัติและสถานะการอนุมัติของ Staff แต่ละท่าน
 async function loadStaffLeaveHistory() {
-    if (!currentUser || currentUser.role !== 'staff') return;
+    if (!currentUser || !['staff', 'hr'].includes(currentUser.role)) return;
+    const staffId = currentUser.staff_id;
+    const tbody = document.getElementById('staff-leave-history');
+    if (!tbody) return;
+    tbody.innerHTML = '';
 
     const { data, error } = await supabaseClient
         .from('leave_requests')
         .select('*')
-        .eq('staff_id', currentUser.staff_id)
+        .eq('staff_id', staffId)
         .order('leave_date', { ascending: false });
 
-    const tbody = document.getElementById('staff-leave-history');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    if (currentUser?.staff_id !== staffId) return;
+    if (error) {
+        console.error('Error loading personal leave requests:', error);
+        tbody.innerHTML = '<tr><td colspan="4" class="py-4 px-4 text-center text-rose-600">โหลดประวัติคำขอไม่สำเร็จ กรุณาลองใหม่</td></tr>';
+        return;
+    }
 
     if (data && data.length > 0) {
         data.forEach(row => {
@@ -507,7 +790,7 @@ async function loadExecutiveReport() {
         // 1. ดึงข้อมูลบุคลากรทั้งหมด
         const { data: staffList, error: staffError } = await supabaseClient
             .from('staff')
-            .select('staff_id, name, department');
+            .select('staff_id, name, department, role');
 
         // 2. ดึงข้อมูลประวัติการสแกนเวลาทั้งหมด
         const { data: logsList, error: logsError } = await supabaseClient
@@ -526,6 +809,7 @@ async function loadExecutiveReport() {
         let totalOnTime = 0;
         let totalLate = 0;
         let totalLeave = leaveList ? leaveList.length : 0;
+        let reportStaffCount = 0;
 
         if (staffList && staffList.length > 0) {
             staffList.forEach(person => {
@@ -538,6 +822,9 @@ async function loadExecutiveReport() {
 
                 totalOnTime += onTimeCount;
                 totalLate += lateCount;
+
+                if (person.role === 'executive') return;
+                reportStaffCount++;
 
                 tbody.innerHTML += `
                     <tr class="hover:bg-slate-50/50 transition">
@@ -554,6 +841,10 @@ async function loadExecutiveReport() {
             });
         } else {
             tbody.innerHTML = `<tr><td colspan="5" class="py-4 px-4 text-center text-slate-400">ไม่พบข้อมูลบุคลากรในระบบ</td></tr>`;
+        }
+
+        if (reportStaffCount === 0 && staffList?.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="py-4 px-4 text-center text-slate-400">ไม่มีข้อมูลบุคลากรที่ไม่ใช่ผู้บริหาร</td></tr>`;
         }
 
         // อัปเดตตัวเลขรวมการ์ดด้านบน
