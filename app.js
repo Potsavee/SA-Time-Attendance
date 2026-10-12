@@ -15,6 +15,11 @@ let checkInCameraReady = false;
 let attendanceScanType = 'check_in';
 let notificationTimeout = null;
 let realtimeChannel = null;
+let bellNotifications = [];
+let nextBellNotificationId = 1;
+let notificationStorageWarningShown = false;
+let bellNotificationStorageKey = null;
+let notificationSyncPromise = null;
 
 function showNotification(message, type = 'success') {
     const toast = document.getElementById('notification-toast');
@@ -32,6 +37,337 @@ function dismissNotification() {
     document.getElementById('notification-toast').classList.add('hidden');
     clearTimeout(notificationTimeout);
     notificationTimeout = null;
+}
+
+function renderBellNotifications() {
+    const list = document.getElementById('notification-bell-list');
+    const count = document.getElementById('notification-bell-count');
+    const unreadCount = bellNotifications.filter(notification => !notification.read).length;
+
+    count.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    count.classList.toggle('hidden', unreadCount === 0);
+    document.getElementById('notification-bell-button').setAttribute(
+        'aria-label',
+        unreadCount > 0 ? `เปิดการแจ้งเตือน มี ${unreadCount} รายการที่ยังไม่อ่าน` : 'เปิดการแจ้งเตือน'
+    );
+    document.getElementById('notification-bell-clear').classList.toggle('hidden', bellNotifications.length === 0);
+
+    if (bellNotifications.length === 0) {
+        list.innerHTML = '<p class="notification-bell-empty">ยังไม่มีการแจ้งเตือน</p>';
+        return;
+    }
+
+    list.replaceChildren(...bellNotifications.map(notification => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `notification-bell-item${notification.read ? '' : ' notification-bell-unread'}`;
+        button.addEventListener('click', () => openBellNotification(notification.id));
+
+        if (!notification.read) {
+            const dot = document.createElement('span');
+            dot.className = 'notification-bell-dot';
+            dot.setAttribute('aria-hidden', 'true');
+            button.append(dot);
+        }
+
+        const content = document.createElement('span');
+        content.className = 'min-w-0 flex-1';
+        const title = document.createElement('span');
+        title.className = 'block text-sm font-bold text-slate-800';
+        title.textContent = notification.title;
+        const message = document.createElement('span');
+        message.className = 'mt-0.5 block text-sm text-slate-600';
+        message.textContent = notification.message;
+        const time = document.createElement('span');
+        time.className = 'mt-1 block text-xs text-slate-400';
+        time.textContent = notification.createdAt.toLocaleString('th-TH');
+        content.append(title, message, time);
+        button.append(content);
+        return button;
+    }));
+}
+
+function addBellNotification(title, message, targetTab = null, key = null) {
+    if (key && bellNotifications.some(notification => notification.key === key)) return;
+
+    bellNotifications.unshift({
+        id: nextBellNotificationId++,
+        title,
+        message,
+        targetTab,
+        key,
+        createdAt: new Date(),
+        read: false
+    });
+    bellNotifications = bellNotifications.slice(0, 30);
+    saveBellNotifications();
+    renderBellNotifications();
+}
+
+function restoreBellNotifications(staffId) {
+    bellNotificationStorageKey = `sa-time-attendance-bell-v1:${staffId}`;
+    try {
+        const storedNotifications = localStorage.getItem(bellNotificationStorageKey);
+        bellNotifications = storedNotifications ? JSON.parse(storedNotifications) : [];
+        if (!Array.isArray(bellNotifications)) throw new Error('Stored notifications are not an array');
+        bellNotifications = bellNotifications
+            .filter(item => item && Number.isInteger(item.id) && typeof item.title === 'string')
+            .slice(0, 30)
+            .map(item => ({ ...item, createdAt: new Date(item.createdAt) }));
+        nextBellNotificationId = bellNotifications.reduce((nextId, item) => Math.max(nextId, item.id + 1), 1);
+    } catch (error) {
+        console.error('Could not restore notifications from this browser:', error);
+        bellNotifications = [];
+        nextBellNotificationId = 1;
+    }
+    document.getElementById('notification-bell-panel').classList.add('hidden');
+    document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    renderBellNotifications();
+}
+
+function saveBellNotifications() {
+    if (!bellNotificationStorageKey) return;
+    try {
+        localStorage.setItem(bellNotificationStorageKey, JSON.stringify(bellNotifications));
+    } catch (error) {
+        console.error('Could not save notifications in this browser:', error);
+        if (!notificationStorageWarningShown) {
+            notificationStorageWarningShown = true;
+            showNotification('บันทึกการแจ้งเตือนไม่ได้ การแจ้งเตือนอาจหายเมื่อออกจากระบบ', 'error');
+        }
+    }
+}
+
+function resetBellNotifications() {
+    bellNotifications = [];
+    nextBellNotificationId = 1;
+    document.getElementById('notification-bell-panel').classList.add('hidden');
+    document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    renderBellNotifications();
+}
+
+function toggleBellNotifications() {
+    const panel = document.getElementById('notification-bell-panel');
+    const willOpen = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willOpen);
+    document.getElementById('notification-bell-button').setAttribute('aria-expanded', String(willOpen));
+
+    if (willOpen) {
+        bellNotifications.forEach(notification => {
+            notification.read = true;
+        });
+        saveBellNotifications();
+        renderBellNotifications();
+    }
+}
+
+function openBellNotification(notificationId) {
+    const notification = bellNotifications.find(item => item.id === notificationId);
+    if (!notification) return;
+
+    document.getElementById('notification-bell-panel').classList.add('hidden');
+    document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    if (notification.targetTab) switchTab(notification.targetTab);
+}
+
+function clearBellNotifications() {
+    bellNotifications = [];
+    saveBellNotifications();
+    renderBellNotifications();
+}
+
+function notificationStateKey(staffId, role, table) {
+    return `sa-time-attendance-notifications-v1:${staffId}:${role}:${table}`;
+}
+
+function readNotificationState(staffId, role, table) {
+    try {
+        const storedState = localStorage.getItem(notificationStateKey(staffId, role, table));
+        return storedState ? JSON.parse(storedState) : null;
+    } catch (error) {
+        console.error('Could not read notification history from this browser:', error);
+        return null;
+    }
+}
+
+function saveNotificationState(staffId, role, table, state) {
+    try {
+        localStorage.setItem(notificationStateKey(staffId, role, table), JSON.stringify(state));
+        return true;
+    } catch (error) {
+        console.error('Could not save notification history in this browser:', error);
+        if (!notificationStorageWarningShown) {
+            notificationStorageWarningShown = true;
+            showNotification('บันทึกสถานะการแจ้งเตือนไม่ได้ การตรวจแจ้งเตือนเมื่อกลับมาใช้งานอาจไม่ครบ', 'error');
+        }
+        return false;
+    }
+}
+
+function rememberRealtimeNotification(payload, table, role, staffId) {
+    const row = payload.new || {};
+    if (!row.id) return;
+
+    const state = readNotificationState(staffId, role, table) || {};
+    if (role === 'staff' || (role === 'hr' && table !== 'attendance_logs')) {
+        state.statuses = { ...state.statuses, [row.id]: row.status };
+    } else if (table === 'attendance_logs') {
+        state.ids = [...new Set([...(state.ids || []), row.id])];
+        state.checkOuts = { ...state.checkOuts, [row.id]: row.check_out || null };
+    } else if (payload.eventType === 'INSERT') {
+        state.ids = [...new Set([...(state.ids || []), row.id])];
+    }
+    state.initialized = true;
+    saveNotificationState(staffId, role, table, state);
+}
+
+async function syncNotificationsOnLogin() {
+    if (!currentUser) return;
+    if (notificationSyncPromise) return notificationSyncPromise;
+
+    const { staff_id: staffId, role } = currentUser;
+    const syncPromise = (async () => {
+        if (role === 'executive') {
+            await syncNewRequestNotifications(staffId, role, 'leave_requests', 'executive-overview');
+            await syncNewRequestNotifications(staffId, role, 'leave_applications', 'executive-overview');
+        } else if (role === 'hr') {
+            await syncNewAttendanceNotifications(staffId, role);
+            await syncPersonalLeaveStatusNotifications(staffId, role);
+        } else if (role === 'staff') {
+            await syncPersonalLeaveStatusNotifications(staffId, role);
+        }
+    })();
+    notificationSyncPromise = syncPromise;
+    try {
+        await syncPromise;
+    } finally {
+        if (notificationSyncPromise === syncPromise) {
+            notificationSyncPromise = null;
+        }
+    }
+}
+
+async function syncNewRequestNotifications(staffId, role, table, targetTab) {
+    const selectFields = table === 'leave_applications'
+        ? 'id, staff_id, leave_type'
+        : 'id, staff_id';
+    const { data, error } = await supabaseClient.from(table).select(selectFields);
+    if (currentUser?.staff_id !== staffId) return;
+    if (error) {
+        console.error(`Could not check missed notifications for ${table}:`, error);
+        showNotification('ตรวจสอบคำขอที่เข้ามาระหว่างไม่ได้ใช้งานไม่สำเร็จ', 'error');
+        return;
+    }
+
+    const previousState = readNotificationState(staffId, role, table);
+    const knownIds = new Set(previousState?.ids || []);
+    const rows = data || [];
+    if (previousState?.initialized) {
+        rows.filter(row => row.id && !knownIds.has(row.id)).forEach(row => {
+            const requestType = table === 'leave_applications'
+                ? `คำร้อง${row.leave_type || 'ลา'}`
+                : 'คำขอออกนอกสถานศึกษา / ไปราชการ';
+            addBellNotification(
+                'มีคำขอใหม่รอพิจารณา',
+                `${requestType} · บุคลากรรหัส ${row.staff_id || '-'}`,
+                targetTab,
+                `${table}:${row.id}:insert`
+            );
+        });
+    }
+
+    saveNotificationState(staffId, role, table, {
+        initialized: true,
+        ids: [...new Set([...knownIds, ...rows.map(row => row.id).filter(Boolean)])]
+    });
+}
+
+async function syncNewAttendanceNotifications(staffId, role) {
+    const { data, error } = await supabaseClient
+        .from('attendance_logs')
+        .select('id, staff_id, check_out')
+        .order('check_in', { ascending: false });
+    if (currentUser?.staff_id !== staffId) return;
+    if (error) {
+        console.error('Could not check missed attendance notifications:', error);
+        showNotification('ตรวจสอบรายการลงเวลาระหว่างไม่ได้ใช้งานไม่สำเร็จ', 'error');
+        return;
+    }
+
+    const previousState = readNotificationState(staffId, role, 'attendance_logs');
+    const knownIds = new Set(previousState?.ids || []);
+    const previousCheckOuts = previousState?.checkOuts || {};
+    const rows = data || [];
+    const missedCheckIns = previousState?.initialized
+        ? rows.filter(row => row.id && !knownIds.has(row.id))
+        : [];
+    const missedCheckOuts = previousState?.initialized
+        ? rows.filter(row => row.id
+            && knownIds.has(row.id)
+            && row.check_out
+            && previousCheckOuts[row.id] !== row.check_out)
+        : [];
+
+    [...missedCheckIns.slice(0, 30).map(row => ({ ...row, event: 'check-in' })),
+        ...missedCheckOuts.slice(0, 30).map(row => ({ ...row, event: 'check-out' }))]
+        .reverse()
+        .forEach(row => {
+            addBellNotification(
+                row.event === 'check-in' ? 'มีรายการลงเวลาเข้าใหม่' : 'มีรายการลงเวลาออกใหม่',
+                `บุคลากรรหัส ${row.staff_id || '-'}`,
+                'hr-management',
+                `attendance_logs:${row.id}:${row.event}:${row.check_out || ''}`
+            );
+        });
+
+    saveNotificationState(staffId, role, 'attendance_logs', {
+        initialized: true,
+        ids: [...new Set([...knownIds, ...rows.map(row => row.id).filter(Boolean)])],
+        checkOuts: {
+            ...previousCheckOuts,
+            ...Object.fromEntries(rows.filter(row => row.id).map(row => [row.id, row.check_out || null]))
+        }
+    });
+}
+
+async function syncPersonalLeaveStatusNotifications(staffId, role) {
+    for (const table of ['leave_requests', 'leave_applications']) {
+        const { data, error } = await supabaseClient
+            .from(table)
+            .select('id, status')
+            .eq('staff_id', staffId);
+        if (currentUser?.staff_id !== staffId) return;
+        if (error) {
+            console.error(`Could not check missed status notifications for ${table}:`, error);
+            showNotification('ตรวจสอบผลคำร้องระหว่างไม่ได้ใช้งานไม่สำเร็จ', 'error');
+            continue;
+        }
+
+        const previousState = readNotificationState(staffId, role, table);
+        const previousStatuses = previousState?.statuses || {};
+        const rows = data || [];
+        if (previousState?.initialized) {
+            rows.filter(row => row.id
+                && Object.prototype.hasOwnProperty.call(previousStatuses, row.id)
+                && previousStatuses[row.id] !== row.status
+                && row.status).forEach(row => {
+                addBellNotification(
+                    'มีการอัปเดตผลคำร้อง',
+                    `สถานะ: ${row.status} · ${table === 'leave_applications' ? 'คำร้องลาป่วย/ลากิจ' : 'คำขอออกนอกสถานศึกษา'}`,
+                    'leave',
+                    `${table}:${row.id}:status:${row.status}`
+                );
+            });
+        }
+
+        saveNotificationState(staffId, role, table, {
+            initialized: true,
+            statuses: {
+                ...previousStatuses,
+                ...Object.fromEntries(rows.filter(row => row.id).map(row => [row.id, row.status]))
+            }
+        });
+    }
 }
 
 function initializeLeaveTimePickers() {
@@ -59,6 +395,21 @@ initializeLeaveTimePickers();
 
 let currentUser = null;
 let staffLeaveHistoryLoadId = 0;
+
+document.addEventListener('click', event => {
+    const wrapper = document.getElementById('notification-bell-wrapper');
+    if (wrapper && !wrapper.contains(event.target)) {
+        document.getElementById('notification-bell-panel').classList.add('hidden');
+        document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        document.getElementById('notification-bell-panel').classList.add('hidden');
+        document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    }
+});
 
 function togglePasswordVisibility() {
     const passwordInput = document.getElementById('user-pass');
@@ -105,6 +456,7 @@ async function handleLogin(event) {
         }
 
         currentUser = data[0];
+        restoreBellNotifications(currentUser.staff_id);
         errorBox.classList.add('hidden');
         document.getElementById('staff-leave-history').innerHTML = '';
 
@@ -153,6 +505,12 @@ async function handleLogin(event) {
 
         document.getElementById('user-badge').innerText = `ผู้ใช้งาน: ${currentUser.name} (${roleText})`;
         subscribeToRealtimeUpdates();
+        try {
+            await syncNotificationsOnLogin();
+        } catch (error) {
+            console.error('Could not check for missed notifications:', error);
+            showNotification('ตรวจสอบการแจ้งเตือนที่พลาดระหว่างไม่ได้ใช้งานไม่สำเร็จ', 'error');
+        }
 
     } catch (err) {
         console.error("Login Error:", err);
@@ -163,6 +521,9 @@ async function handleLogin(event) {
 function handleLogout() {
     stopRealtimeSubscriptions();
     staffLeaveHistoryLoadId += 1;
+    notificationSyncPromise = null;
+    resetBellNotifications();
+    bellNotificationStorageKey = null;
     currentUser = null;
     document.getElementById('staff-leave-history').innerHTML = '';
     document.getElementById('app-section').classList.add('hidden');
@@ -181,11 +542,25 @@ function subscribeToRealtimeUpdates() {
             event: '*',
             schema: 'public',
             table: 'attendance_logs'
-        }, () => {
+        }, payload => {
             if (currentUser?.staff_id !== subscribedStaffId) return;
 
             if (currentUser.role === 'hr') {
                 loadHrAttendanceLogs();
+                const row = payload.new || payload.old || {};
+                rememberRealtimeNotification(payload, 'attendance_logs', 'hr', subscribedStaffId);
+                const isCheckIn = payload.eventType === 'INSERT';
+                const isCheckOut = payload.eventType === 'UPDATE'
+                    && row.check_out
+                    && row.check_out !== payload.old?.check_out;
+                if (isCheckIn || isCheckOut) {
+                    addBellNotification(
+                        isCheckOut ? 'มีรายการลงเวลาออกใหม่' : 'มีรายการลงเวลาเข้าใหม่',
+                        `บุคลากรรหัส ${row.staff_id || '-'}`,
+                        'hr-management',
+                        row.id ? `attendance_logs:${row.id}:${isCheckOut ? 'check-out' : 'check-in'}:${row.check_out || ''}` : null
+                    );
+                }
             }
             if (currentUser.role === 'staff' || currentUser.role === 'hr') {
                 loadAttendanceHistory();
@@ -198,17 +573,28 @@ function subscribeToRealtimeUpdates() {
             event: '*',
             schema: 'public',
             table: 'leave_requests'
-        }, () => {
+        }, payload => {
+            notifyLeaveRealtimeChange(payload, 'leave_requests', subscribedStaffId);
             refreshLeaveRequestViews(subscribedStaffId);
         })
         .on('postgres_changes', {
             event: '*',
             schema: 'public',
             table: 'leave_applications'
-        }, () => {
+        }, payload => {
+            notifyLeaveRealtimeChange(payload, 'leave_applications', subscribedStaffId);
             refreshLeaveRequestViews(subscribedStaffId);
         })
         .subscribe((status, error) => {
+            if (status === 'SUBSCRIBED') {
+                syncNotificationsOnLogin().catch(syncError => {
+                    if (currentUser?.staff_id !== subscribedStaffId) return;
+                    console.error('Could not check for missed notifications:', syncError);
+                    showNotification('ตรวจสอบการแจ้งเตือนที่พลาดระหว่างไม่ได้ใช้งานไม่สำเร็จ', 'error');
+                });
+                return;
+            }
+
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 console.error('Supabase Realtime subscription failed:', error || status);
                 if (currentUser?.staff_id === subscribedStaffId) {
@@ -216,6 +602,46 @@ function subscribeToRealtimeUpdates() {
                 }
             }
         });
+}
+
+function notifyLeaveRealtimeChange(payload, table, subscribedStaffId) {
+    if (currentUser?.staff_id !== subscribedStaffId) return;
+
+    const newRow = payload.new || {};
+    const oldRow = payload.old || {};
+    const isLeaveApplication = table === 'leave_applications';
+
+    if (currentUser.role === 'executive' && payload.eventType === 'INSERT') {
+        rememberRealtimeNotification(payload, table, 'executive', subscribedStaffId);
+        const requestType = isLeaveApplication
+            ? `คำร้อง${newRow.leave_type || 'ลา'}`
+            : 'คำขอออกนอกสถานศึกษา / ไปราชการ';
+        addBellNotification(
+            'มีคำขอใหม่รอพิจารณา',
+            `${requestType} · บุคลากรรหัส ${newRow.staff_id || '-'}`,
+            'executive-overview',
+            newRow.id ? `${table}:${newRow.id}:insert` : null
+        );
+        return;
+    }
+
+    if (['staff', 'hr'].includes(currentUser.role)
+        && newRow.staff_id === subscribedStaffId) {
+        rememberRealtimeNotification(payload, table, currentUser.role, subscribedStaffId);
+    }
+
+    if (['staff', 'hr'].includes(currentUser.role)
+        && payload.eventType === 'UPDATE'
+        && newRow.staff_id === subscribedStaffId
+        && newRow.status
+        && oldRow.status !== newRow.status) {
+        addBellNotification(
+            'มีการอัปเดตผลคำร้อง',
+            `สถานะ: ${newRow.status} · ${isLeaveApplication ? 'คำร้องลาป่วย/ลากิจ' : 'คำขอออกนอกสถานศึกษา'}`,
+            'leave',
+            newRow.id ? `${table}:${newRow.id}:status:${newRow.status}` : null
+        );
+    }
 }
 
 function refreshLeaveRequestViews(subscribedStaffId) {

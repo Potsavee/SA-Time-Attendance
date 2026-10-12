@@ -3,6 +3,115 @@ body {
     font-family: 'Sarabun', sans-serif;
 }
 
+.notification-bell-wrapper {
+    position: relative;
+}
+
+.notification-bell-button {
+    position: relative;
+    display: flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(255 255 255 / 20%);
+    border-radius: 0.75rem;
+    color: white;
+    transition: background-color 150ms ease;
+}
+
+.notification-bell-button:hover,
+.notification-bell-button[aria-expanded="true"] {
+    background: rgb(255 255 255 / 12%);
+}
+
+.notification-bell-button:focus-visible,
+.notification-bell-panel button:focus-visible {
+    outline: 2px solid #fcd34d;
+    outline-offset: 2px;
+}
+
+.notification-bell-count {
+    position: absolute;
+    top: -0.25rem;
+    right: -0.25rem;
+    display: flex;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.25rem;
+    border: 2px solid #881337;
+    border-radius: 9999px;
+    background: #fbbf24;
+    color: #4c0519;
+    font-size: 0.65rem;
+    font-weight: 700;
+}
+
+.notification-bell-count.hidden {
+    display: none;
+}
+
+.notification-bell-panel {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    right: 0;
+    z-index: 60;
+    width: min(22rem, calc(100vw - 2rem));
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: white;
+    color: #334155;
+    box-shadow: 0 16px 40px rgb(15 23 42 / 20%);
+}
+
+.notification-bell-panel.hidden {
+    display: none;
+}
+
+.notification-bell-list {
+    max-height: min(24rem, 60vh);
+    overflow-y: auto;
+}
+
+.notification-bell-item {
+    display: flex;
+    width: 100%;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    text-align: left;
+}
+
+.notification-bell-item:hover {
+    background: #f8fafc;
+}
+
+.notification-bell-item + .notification-bell-item {
+    border-top: 1px solid #f1f5f9;
+}
+
+.notification-bell-unread {
+    background: #fff7ed;
+}
+
+.notification-bell-dot {
+    flex: 0 0 auto;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-top: 0.375rem;
+    border-radius: 9999px;
+    background: #e11d48;
+}
+
+.notification-bell-empty {
+    padding: 2rem 1rem;
+    color: #94a3b8;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
 .notification-toast {
     position: fixed;
     top: 1rem;
