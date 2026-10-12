@@ -5,6 +5,32 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 document.getElementById('current-date').innerText = "วันที่ปัจจุบัน: " + new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
 
+const DEFAULT_LEAVE_START_TIME = '08:00';
+const DEFAULT_LEAVE_RETURN_TIME = '08:30';
+
+function initializeLeaveTimePickers() {
+    const startSelect = document.getElementById('leave-time-out');
+    const returnSelect = document.getElementById('leave-time-return');
+
+    [startSelect, returnSelect].forEach(select => {
+        for (let minutes = 0; minutes < 24 * 60; minutes += 30) {
+            const hour = String(Math.floor(minutes / 60)).padStart(2, '0');
+            const minute = String(minutes % 60).padStart(2, '0');
+            const time = `${hour}:${minute}`;
+            select.add(new Option(time, time));
+        }
+    });
+
+    resetLeaveTimePickers();
+}
+
+function resetLeaveTimePickers() {
+    document.getElementById('leave-time-out').value = DEFAULT_LEAVE_START_TIME;
+    document.getElementById('leave-time-return').value = DEFAULT_LEAVE_RETURN_TIME;
+}
+
+initializeLeaveTimePickers();
+
 let currentUser = null;
 
 function togglePasswordVisibility() {
@@ -29,23 +55,28 @@ async function handleLogin(event) {
     event.preventDefault();
     const selectedRole = document.getElementById('user-role').value;
     const staffIdInput = document.getElementById('user-id').value.trim();
-    const passwordInput = document.getElementById('user-pass').value.trim();
+    const passwordInput = document.getElementById('user-pass').value;
     const errorBox = document.getElementById('login-error');
 
     try {
-        // ค้นหาโดยเช็ค staff_id และ password โดยไม่ใช้ .single() เพื่อป้องกัน Error 406
         const { data, error } = await supabaseClient
             .from('staff')
             .select('*')
             .eq('staff_id', staffIdInput)
             .eq('password', passwordInput);
 
+        console.log("ผลลัพธ์จาก Supabase:", data, error);
+
         if (error || !data || data.length === 0) {
             errorBox.classList.remove('hidden');
             return;
         }
 
-        // ดึงข้อมูลผู้ใช้คนแรกที่เจอ
+        if (data[0].role !== selectedRole) {
+            errorBox.classList.remove('hidden');
+            return;
+        }
+
         currentUser = data[0];
         errorBox.classList.add('hidden');
 
@@ -56,7 +87,7 @@ async function handleLogin(event) {
         const tabHr = document.getElementById('tab-hr-management');
         const tabCheckin = document.getElementById('tab-checkin');
         const tabLeave = document.getElementById('tab-leave');
-        const tabReportBtn = document.getElementById('tab-executive-report-btn'); // เพิ่มตัวแปรปุ่มรายงานผู้บริหาร
+        const tabReportBtn = document.getElementById('tab-report');
         let roleText = '';
 
         if (currentUser.role === 'executive') {
@@ -65,7 +96,7 @@ async function handleLogin(event) {
             tabHr.classList.add('hidden');
             tabCheckin.classList.add('hidden');
             tabLeave.classList.add('hidden');
-            if (tabReportBtn) tabReportBtn.classList.remove('hidden'); // แสดงเฉพาะผู้บริหาร
+            if (tabReportBtn) tabReportBtn.classList.remove('hidden');
             switchTab('executive-overview');
             loadExecutiveRequests();
             loadExecutiveReport();
@@ -75,8 +106,8 @@ async function handleLogin(event) {
             tabHr.classList.remove('hidden');
             tabCheckin.classList.remove('hidden');
             tabLeave.classList.remove('hidden');
-            if (tabReportBtn) tabReportBtn.classList.add('hidden'); // ซ่อนจาก HR
-            switchTab('hr-management');
+            if (tabReportBtn) tabReportBtn.classList.add('hidden');
+            switchTab('checkin');
             loadHrAttendanceLogs();
             loadAttendanceHistory();
         } else {
@@ -85,7 +116,7 @@ async function handleLogin(event) {
             tabHr.classList.add('hidden');
             tabCheckin.classList.remove('hidden');
             tabLeave.classList.remove('hidden');
-            if (tabReportBtn) tabReportBtn.classList.add('hidden'); // ซ่อนจากบุคลากรทั่วไป
+            if (tabReportBtn) tabReportBtn.classList.add('hidden');
             switchTab('checkin');
             loadAttendanceHistory();
             loadStaffLeaveHistory();
@@ -94,7 +125,7 @@ async function handleLogin(event) {
         document.getElementById('user-badge').innerText = `ผู้ใช้งาน: ${currentUser.name} (${roleText})`;
 
     } catch (err) {
-        console.error(err);
+        console.error("Login Error:", err);
         errorBox.classList.remove('hidden');
     }
 }
@@ -131,6 +162,17 @@ function switchTab(tabName) {
 
 // 1. ผู้บริหารโหลดคำขอทั้งหมด
 async function loadExecutiveRequests() {
+    const { data: staffData, error: staffError } = await supabaseClient
+        .from('staff')
+        .select('staff_id, name');
+
+    const staffMap = {};
+    if (staffData) {
+        staffData.forEach(staff => {
+            staffMap[staff.staff_id] = staff.name;
+        });
+    }
+
     const { data, error } = await supabaseClient
         .from('leave_requests')
         .select('*')
@@ -145,6 +187,7 @@ async function loadExecutiveRequests() {
         data.forEach(row => {
             if(row.status === 'รออนุมัติ') pendingCount++;
 
+            const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อผู้ใช้';
             const substituteText = row.substitute_teacher 
                 ? `<span class="text-xs text-slate-700 font-medium">วิชา: ${row.subject || '-'} (${row.period || '-'})<br>ผู้สอนแทน: ${row.substitute_teacher}</span>`
                 : `<span class="text-xs text-slate-400">ไม่มีการฝากคาบ</span>`;
@@ -165,7 +208,10 @@ async function loadExecutiveRequests() {
 
             tbody.innerHTML += `
                 <tr class="hover:bg-slate-50/50 transition">
-                    <td class="py-4 px-4 font-medium text-slate-800">${row.staff_id}</td>
+                    <td class="py-4 px-4">
+                        <div class="font-medium text-slate-800">${staffName}</div>
+                        <div class="text-xs text-slate-400">รหัส: ${row.staff_id}</div>
+                    </td>
                     <td class="py-4 px-4 text-slate-600">${row.reason}</td>
                     <td class="py-4 px-4 text-slate-600">${row.leave_date}<br><span class="text-xs text-slate-400">${row.time_range}</span></td>
                     <td class="py-4 px-4">${substituteText}</td>
@@ -199,6 +245,17 @@ async function updateLeaveStatus(id, newStatus) {
 
 // 2. HR ตรวจสอบการมาปฏิบัติงาน
 async function loadHrAttendanceLogs() {
+    const { data: staffData, error: staffError } = await supabaseClient
+        .from('staff')
+        .select('staff_id, name');
+
+    const staffMap = {};
+    if (staffData) {
+        staffData.forEach(staff => {
+            staffMap[staff.staff_id] = staff.name;
+        });
+    }
+
     const { data, error } = await supabaseClient
         .from('attendance_logs')
         .select('*')
@@ -209,16 +266,21 @@ async function loadHrAttendanceLogs() {
 
     if (data && data.length > 0) {
         data.forEach(row => {
+            const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อ';
             const checkInTime = row.check_in ? new Date(row.check_in).toLocaleString('th-TH') : '-';
             const checkOutTime = row.check_out ? new Date(row.check_out).toLocaleString('th-TH') : '-';
             const badgeClass = row.status === 'มาตรงเวลา' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700';
+            const statusText = row.status === 'มาตรงเวลา' ? 'ตรงเวลา' : 'มาสาย';
 
             tbody.innerHTML += `
-                <tr class="hover:bg-slate-50/50 transition">
-                    <td class="py-4 px-4 font-medium text-slate-800">${row.staff_id}</td>
-                    <td class="py-4 px-4 text-slate-600">${checkInTime}</td>
-                    <td class="py-4 px-4 text-slate-600">${checkOutTime}</td>
-                    <td class="py-4 px-4"><span class="px-2.5 py-1 ${badgeClass} rounded-full text-xs font-medium">${row.status}</span></td>
+                <tr class="hover:bg-slate-50/50 transition align-top">
+                    <td class="py-3 px-4">
+                        <div class="font-semibold text-slate-800">${staffName}</div>
+                        <div class="text-[11px] text-slate-400">${row.staff_id}</div>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600">${checkInTime}</td>
+                    <td class="py-3 px-4 text-slate-600">${checkOutTime}</td>
+                    <td class="py-3 px-4"><span class="px-2.5 py-1 ${badgeClass} rounded-full text-xs font-medium">${statusText}</span></td>
                 </tr>
             `;
         });
@@ -245,7 +307,7 @@ async function recordCheckIn() {
 
     const { error } = await supabaseClient
         .from('attendance_logs')
-        .insert([{ staff_id: currentUser.staff_id, check_in: now.toISOString(), status: status }]);
+        .insert([{ staff_id: currentUser.staff_id, check_in: now.toISOString(), status }]);
 
     if (error) {
         alert('เกิดข้อผิดพลาดในการบันทึกเวลา');
@@ -257,10 +319,9 @@ async function recordCheckIn() {
 
 // บันทึกเวลาออกงาน
 async function recordCheckOut() {
-    const now = new Date();
     const { error } = await supabaseClient
         .from('attendance_logs')
-        .update({ check_out: now.toISOString() })
+        .update({ check_out: new Date().toISOString() })
         .eq('staff_id', currentUser.staff_id)
         .is('check_out', null);
 
@@ -312,15 +373,51 @@ async function loadAttendanceHistory() {
     document.getElementById('stat-late').innerHTML = `${lateCount} <span class="text-sm font-normal text-amber-600">ครั้ง</span>`;
 }
 
+function formatLeaveTimeRange(startTime, endTime) {
+    if (!startTime || !endTime) return '';
+    return `${startTime} - ${endTime} น.`;
+}
+
+function validateLeaveTimeRange(startTime, endTime) {
+    if (!startTime || !endTime) {
+        return { valid: false, message: 'กรุณาเลือกเวลาออกและเวลากลับให้ครบถ้วน' };
+    }
+
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+
+    if (endMinutes <= startMinutes) {
+        return { valid: false, message: 'เวลากลับต้องมากกว่าเวลาออก' };
+    }
+
+    if ((endMinutes - startMinutes) > 180) {
+        return { valid: false, message: 'ระยะเวลาออกนอกสถานศึกษาห้ามเกิน 3 ชั่วโมง' };
+    }
+
+    return { valid: true, message: '' };
+}
+
 // 4. ส่งคำขอออกนอกสถานศึกษา
 async function submitLeave(event) {
     event.preventDefault();
     const reason = document.getElementById('leave-reason').value;
     const leaveDate = document.getElementById('leave-date').value;
-    const timeRange = document.getElementById('leave-timerange').value;
+    const startTime = document.getElementById('leave-time-out').value;
+    const endTime = document.getElementById('leave-time-return').value;
+    const timeRange = formatLeaveTimeRange(startTime, endTime);
     const subject = document.getElementById('leave-subject').value;
     const period = document.getElementById('leave-period').value;
     const substitute = document.getElementById('leave-substitute').value;
+
+    const validation = validateLeaveTimeRange(startTime, endTime);
+    if (!validation.valid) {
+        alert(validation.message);
+        return;
+    }
+
+    document.getElementById('leave-timerange').value = timeRange;
 
     const { error } = await supabaseClient
         .from('leave_requests')
@@ -340,6 +437,8 @@ async function submitLeave(event) {
     } else {
         alert('ยื่นคำขออนุมัติไปยังฐานข้อมูลเรียบร้อยแล้ว');
         document.getElementById('leave-reason').value = '';
+        document.getElementById('leave-date').value = '';
+        resetLeaveTimePickers();
         document.getElementById('leave-timerange').value = '';
         document.getElementById('leave-subject').value = '';
         document.getElementById('leave-period').value = '';
@@ -398,7 +497,7 @@ async function loadExecutiveReport() {
         // 1. ดึงข้อมูลบุคลากรทั้งหมด
         const { data: staffList, error: staffError } = await supabaseClient
             .from('staff')
-            .select('*');
+            .select('staff_id, name, department');
 
         // 2. ดึงข้อมูลประวัติการสแกนเวลาทั้งหมด
         const { data: logsList, error: logsError } = await supabaseClient

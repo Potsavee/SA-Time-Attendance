@@ -50,7 +50,7 @@
 
                 <div>
                     <label
-                        class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">รหัสประจำตัวบุคลากร</label>
+                        class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">รหัสประจำตัว</label>
                     <div class="relative">
                         <span
                             class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
@@ -59,7 +59,7 @@
                                     d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
                             </svg>
                         </span>
-                        <input type="text" id="user-id" required
+                        <input type="text" id="user-id" required autocomplete="username"
                             class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none transition"
                             placeholder="เช่น 670710726">
                     </div>
@@ -92,7 +92,7 @@
                 </div>
 
                 <div id="login-error" class="text-rose-600 text-xs text-center hidden pt-1">
-                    ข้อมูลเข้าสู่ระบบหรือบทบาทไม่ถูกต้อง</div>
+                    ข้อมูลเข้าสู่ระบบไม่ถูกต้อง หรือบทบาทที่เลือกไม่ตรงกับบัญชี</div>
                 <button type="submit" id="login-btn"
                     class="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-rose-950 font-bold rounded-xl shadow-md transition mt-6">เข้าสู่ระบบ</button>
             </form>
@@ -127,15 +127,14 @@
                 id="nav-tabs">
                 <button onclick="switchTab('executive-overview')" id="tab-executive-overview"
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">พิจารณาอนุมัติคำขอ</button>
-                <button onclick="switchTab('hr-management')" id="tab-hr-management"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
                 <button onclick="switchTab('checkin')" id="tab-checkin"
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">ลงเวลาทำงาน</button>
+                <button onclick="switchTab('hr-management')" id="tab-hr-management"
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
                 <button onclick="switchTab('leave')" id="tab-leave"
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ยื่นคำขอออกนอกสถานศึกษา</button>
-                <button id="tab-executive-report-btn" onclick="switchTab('report')" id="tab-report"
-                    class="px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">สรุปสถิติ
-                    & รายงานประเมิน 6 เดือน</button>
+                <button onclick="switchTab('report')" id="tab-report"
+                    class="px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">สรุปสถิติ & รายงานประเมิน 6 เดือน</button>
             </div>
 
             <!-- TAB EXECUTIVE: ผู้บริหารสถานศึกษา -->
@@ -153,7 +152,7 @@
                     </div>
                     <div class="p-5 bg-white rounded-2xl border border-amber-100 bg-amber-50/20 shadow-sm">
                         <p class="text-xs font-semibold text-amber-600 uppercase">มาสาย</p>
-                        <h4 class="text-2xl font-bold text-amber-700 mt-1">4 <span
+                        <h4 class="text-2xl font-bold text-amber-700 mt-1">6 <span
                                 class="text-xs font-normal text-amber-600">คน</span></h4>
                     </div>
                     <div class="p-5 bg-white rounded-2xl border border-rose-100 bg-rose-50/20 shadow-sm">
@@ -169,7 +168,7 @@
                             <h3 class="text-base font-bold text-slate-800">ศูนย์พิจารณาอนุมัติคำขอออกนอกสถานศึกษา /
                                 ไปราชการ</h3>
                             <p class="text-xs text-slate-500">
-                                ตรวจสอบข้อมูลการปฏิบัติราชการและการฝากคาบสอนเพื่อไม่ให้กระทบนักเรียน</p>
+                                ตรวจสอบข้อมูลการปฏิบัติราชการและการฝากคาบสอน</p>
                         </div>
                     </div>
                     <div class="overflow-x-auto">
@@ -212,10 +211,10 @@
                             <thead>
                                 <tr
                                     class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                    <th class="py-3 px-4">รหัสบุคลากร</th>
+                                    <th class="py-3 px-4">ชื่อ - รหัส</th>
                                     <th class="py-3 px-4">เวลาสแกนเข้า</th>
                                     <th class="py-3 px-4">เวลาสแกนออก</th>
-                                    <th class="py-3 px-4">สถานะประมวลผล</th>
+                                    <th class="py-3 px-4">สถานะ</th>
                                 </tr>
                             </thead>
                             <tbody id="hr-attendance-list" class="text-sm divide-y divide-slate-50"></tbody>
@@ -273,11 +272,43 @@
                                 <input type="date" id="leave-date" required
                                     class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
                             </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">เวลาออก - กลับ (ไม่เกิน 3
-                                    ชม.)</label>
-                                <input type="text" id="leave-timerange" placeholder="เช่น 10:00 - 12:00 น." required
-                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                            <div class="md:col-span-2">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                    <label class="text-xs font-semibold text-slate-700">เวลาออก - กลับ</label>
+                                    <span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full text-[11px] font-semibold">ไม่เกิน 3 ชม.</span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label for="leave-time-out" class="flex items-center gap-3 p-3.5 bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-amber-300 transition">
+                                        <span class="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-700 shrink-0">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <circle cx="12" cy="12" r="9" stroke-width="2" />
+                                                <path stroke-linecap="round" stroke-width="2" d="M12 7v5l3 2" />
+                                            </svg>
+                                        </span>
+                                        <span class="flex-1 min-w-0">
+                                            <span class="block text-[11px] font-semibold text-slate-500 mb-1">เวลาออก</span>
+                                            <select id="leave-time-out" required
+                                                class="w-full bg-transparent text-base font-bold text-slate-800 focus:outline-none cursor-pointer">
+                                            </select>
+                                        </span>
+                                    </label>
+                                    <label for="leave-time-return" class="flex items-center gap-3 p-3.5 bg-gradient-to-br from-rose-50 to-white border border-rose-200 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-rose-300 transition">
+                                        <span class="flex items-center justify-center w-10 h-10 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <circle cx="12" cy="12" r="9" stroke-width="2" />
+                                                <path stroke-linecap="round" stroke-width="2" d="M12 7v5l3 2" />
+                                            </svg>
+                                        </span>
+                                        <span class="flex-1 min-w-0">
+                                            <span class="block text-[11px] font-semibold text-slate-500 mb-1">เวลากลับ</span>
+                                            <select id="leave-time-return" required
+                                                class="w-full bg-transparent text-base font-bold text-slate-800 focus:outline-none cursor-pointer">
+                                            </select>
+                                        </span>
+                                    </label>
+                                </div>
+                                <p class="mt-2 text-[11px] text-slate-500">เลือกเวลาได้ครั้งละ 30 นาที (ตั้งต้น 08:00 - 08:30 น.)</p>
+                                <input type="hidden" id="leave-timerange">
                             </div>
                         </div>
                         <div>
