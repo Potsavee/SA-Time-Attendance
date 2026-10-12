@@ -161,6 +161,7 @@ function switchTab(tabName) {
 }
 
 // 1. ผู้บริหารโหลดคำขอทั้งหมด
+// 1. ผู้บริหารโหลดคำขอทั้งหมด
 async function loadExecutiveRequests() {
     const { data: staffData, error: staffError } = await supabaseClient
         .from('staff')
@@ -173,18 +174,27 @@ async function loadExecutiveRequests() {
         });
     }
 
+    // ดึงข้อมูลทั้งหมดโดยไม่ใช้ .order() เพื่อป้องกัน Error เรื่องชื่อคอลัมน์
     const { data, error } = await supabaseClient
         .from('leave_requests')
-        .select('*')
-        .order('leave_date', { ascending: false });
+        .select('*');
 
     const tbody = document.getElementById('exec-requests-list');
     tbody.innerHTML = '';
 
+    if (error) {
+        console.error('Error loading leave requests:', error);
+        tbody.innerHTML = `<tr><td colspan="6" class="py-4 px-4 text-center text-rose-600">โหลดรายการคำขอไม่สำเร็จ กรุณาลองใหม่</td></tr>`;
+        return;
+    }
+
     let pendingCount = 0;
 
     if (data && data.length > 0) {
-        data.forEach(row => {
+        // กลับด้านข้อมูล (Reverse) ให้รายการที่ถูกเพิ่มเข้ามาล่าสุดอยู่บนสุด
+        const reversedData = [...data].reverse();
+
+        reversedData.forEach(row => {
             if(row.status === 'รออนุมัติ') pendingCount++;
 
             const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อผู้ใช้';
