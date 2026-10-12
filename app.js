@@ -8,7 +8,7 @@ document.getElementById('current-date').innerText = "วันที่ปัจ
 const DEFAULT_LEAVE_START_TIME = '08:00';
 const DEFAULT_LEAVE_RETURN_TIME = '08:30';
 const SCHOOL_LOCATION = { latitude: 13.816907, longitude: 100.039916 };
-const SCHOOL_GEOFENCE_RADIUS_METERS = 3000;
+const SCHOOL_GEOFENCE_RADIUS_METERS = 2000;
 let checkInCameraStream = null;
 let checkInLocationVerified = false;
 let checkInCameraReady = false;
@@ -396,7 +396,7 @@ async function startAttendanceScan(scanType) {
 
         if (distance > SCHOOL_GEOFENCE_RADIUS_METERS) {
             locationStatus.textContent = `อยู่นอกเขตโรงเรียน (${Math.round(distance)} เมตรจากจุดที่กำหนด)`;
-            showCheckInError('ต้องอยู่ภายในรัศมี 3 กิโลเมตรจากโรงเรียนจึงจะลงเวลาได้');
+            showCheckInError('ต้องอยู่ภายในรัศมีโรงเรียนจึงจะลงเวลาได้');
             stopCheckInCamera();
             return;
         }
@@ -409,14 +409,14 @@ async function startAttendanceScan(scanType) {
         }
 
         if (distance + accuracy > SCHOOL_GEOFENCE_RADIUS_METERS) {
-            locationStatus.textContent = `อยู่ใกล้ขอบเขตโรงเรียน ห่าง ${Math.round(distance)} เมตร (ความแม่นยำ ±${Math.round(accuracy)} เมตร)`;
+            locationStatus.textContent = `อยู่ใกล้ขอบเขตโรงเรียน ห่างจุดศูนย์กลาง ${Math.round(distance)} เมตร (ความแม่นยำ ±${Math.round(accuracy)} เมตร)`;
             showCheckInError('GPS ยังยืนยันไม่ได้ว่าอยู่ภายในเขตโรงเรียน กรุณาขยับเข้าใกล้อาคารแล้วลองอีกครั้ง');
             stopCheckInCamera();
             return;
         }
 
         checkInLocationVerified = true;
-        locationStatus.textContent = `อยู่ในเขตโรงเรียน ห่าง ${Math.round(distance)} เมตร (ความแม่นยำ ±${Math.round(accuracy)} เมตร)`;
+        locationStatus.textContent = `อยู่ในเขตโรงเรียน ห่างจุดศูนย์กลาง ${Math.round(distance)} เมตร (ความแม่นยำ ±${Math.round(accuracy)} เมตร)`;
         await cameraPromise;
         if (checkInCameraReady) {
             document.getElementById('checkin-capture-button').classList.remove('hidden');
@@ -639,12 +639,18 @@ async function loadAttendanceHistory() {
             if(row.status === 'มาตรงเวลา') onTimeCount++;
             else lateCount++;
 
+            const checkInDate = row.check_in ? new Date(row.check_in).toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            }) : '-';
             const checkInTime = row.check_in ? new Date(row.check_in).toLocaleTimeString('th-TH') : '-';
             const checkOutTime = row.check_out ? new Date(row.check_out).toLocaleTimeString('th-TH') : '-';
             const badgeClass = row.status === 'มาตรงเวลา' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700';
 
             tbody.innerHTML += `
                 <tr class="hover:bg-slate-50/50 transition">
+                    <td class="py-4 px-4 text-slate-600">${checkInDate}</td>
                     <td class="py-4 px-4 text-slate-600">${checkInTime}</td>
                     <td class="py-4 px-4 text-slate-600">${checkOutTime}</td>
                     <td class="py-4 px-4"><span class="px-2.5 py-1 ${badgeClass} rounded-full text-xs font-medium">${row.status}</span></td>
@@ -652,7 +658,7 @@ async function loadAttendanceHistory() {
             `;
         });
     } else {
-        tbody.innerHTML = `<tr><td colspan="3" class="py-4 px-4 text-center text-slate-400">ยังไม่มีประวัติการปฏิบัติงาน</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ยังไม่มีประวัติการปฏิบัติงาน</td></tr>`;
     }
 
     document.getElementById('stat-ontime').innerHTML = `${onTimeCount} <span class="text-sm font-normal text-emerald-600">ครั้ง</span>`;
