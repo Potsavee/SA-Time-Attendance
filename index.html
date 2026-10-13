@@ -160,10 +160,10 @@
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">พิจารณาอนุมัติคำขอ</button>
                 <button onclick="switchTab('checkin')" id="tab-checkin"
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">ลงเวลาทำงาน</button>
-                <button onclick="switchTab('hr-management')" id="tab-hr-management"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
                 <button onclick="switchTab('leave')" id="tab-leave"
                     class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">คำร้องลา / ขอออกนอกสถานศึกษา</button>
+                <button onclick="switchTab('hr-management')" id="tab-hr-management"
+                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
                 <button onclick="switchTab('report')" id="tab-report"
                     class="px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">สรุปสถิติ & รายงานประเมิน</button>
             </div>
@@ -227,7 +227,7 @@
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
                             <h3 class="text-base font-bold text-slate-800">
-                                ตารางกำกับและตรวจสอบการมาปฏิบัติงานบุคลากรรายวัน</h3>
+                                ตารางกำกับและตรวจสอบการมาปฏิบัติงานบุคลากร</h3>
                             <p class="text-xs text-slate-500">สำหรับตรวจสอบข้อมูลสถิติ ป้องกันการลงเวลาแทนกัน
                                 และสรุปยอดส่งทางราชการ</p>
                         </div>
@@ -237,6 +237,36 @@
                                 class="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400">
                         </div>
                     </div>
+                    <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="สรุปการปฏิบัติงานวันนี้">
+                        <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                            <p class="text-xs font-semibold text-emerald-700">มาทำงานวันนี้</p>
+                            <p id="hr-summary-present" class="mt-1 text-2xl font-extrabold text-emerald-800">- <span class="text-xs font-normal">คน</span></p>
+                        </div>
+                        <div class="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                            <p class="text-xs font-semibold text-amber-700">มาสายวันนี้</p>
+                            <p id="hr-summary-late" class="mt-1 text-2xl font-extrabold text-amber-800">- <span class="text-xs font-normal">คน</span></p>
+                        </div>
+                        <div class="rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
+                            <p class="text-xs font-semibold text-rose-700">ลา / ออกนอกสถานศึกษาวันนี้</p>
+                            <p id="hr-summary-leave" class="mt-1 text-2xl font-extrabold text-rose-800">- <span class="text-xs font-normal">คน</span></p>
+                        </div>
+                    </div>
+                    <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex flex-wrap gap-2" role="group" aria-label="เลือกช่วงเวลาการปฏิบัติงาน">
+                            <button id="hr-period-daily" type="button" onclick="setHrAttendancePeriod('daily')"
+                                class="rounded-xl bg-rose-900 px-4 py-2 text-xs font-semibold text-white">รายวัน</button>
+                            <button id="hr-period-monthly" type="button" onclick="setHrAttendancePeriod('monthly')"
+                                class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200">รายเดือน</button>
+                            <button id="hr-period-six-months" type="button" onclick="setHrAttendancePeriod('six-months')"
+                                class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200">ราย 6 เดือน</button>
+                        </div>
+                        <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                            <span id="hr-period-date-label">เลือกวันที่</span>
+                            <input type="date" id="hr-period-date" onchange="filterHrTable()"
+                                class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                        </label>
+                    </div>
+                    <p id="hr-period-description" class="mb-4 text-xs text-slate-500" aria-live="polite"></p>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>

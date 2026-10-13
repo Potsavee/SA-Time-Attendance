@@ -21,6 +21,7 @@ let nextBellNotificationId = 1;
 let notificationStorageWarningShown = false;
 let bellNotificationStorageKey = null;
 let notificationSyncPromise = null;
+let hrAttendancePeriod = 'daily';
 
 function showNotification(message, type = 'success') {
     const toast = document.getElementById('notification-toast');
@@ -703,6 +704,7 @@ function refreshLeaveRequestViews(subscribedStaffId) {
         loadExecutiveReport();
     } else {
         loadStaffLeaveHistory();
+        if (currentUser.role === 'hr') loadHrDailySummary();
     }
 }
 
@@ -924,18 +926,20 @@ async function loadHrAttendanceLogs() {
         .order('check_in', { ascending: false });
 
     const tbody = document.getElementById('hr-attendance-list');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (data && data.length > 0) {
         data.forEach(row => {
             const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อ';
+            const checkInDateKey = row.check_in ? getLocalDateKey(new Date(row.check_in)) : '';
             const checkInTime = row.check_in ? new Date(row.check_in).toLocaleString('th-TH') : '-';
             const checkOutTime = row.check_out ? new Date(row.check_out).toLocaleString('th-TH') : '-';
             const badgeClass = row.status === 'มาตรงเวลา' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700';
             const statusText = row.status === 'มาตรงเวลา' ? 'ตรงเวลา' : 'มาสาย';
 
             tbody.innerHTML += `
-                <tr class="hover:bg-slate-50/50 transition align-top">
+                <tr data-check-in-date="${checkInDateKey}" class="hover:bg-slate-50/50 transition align-top">
                     <td class="py-3 px-4">
                         <div class="font-semibold text-slate-800">${staffName}</div>
                         <div class="text-[11px] text-slate-400">${row.staff_id}</div>
@@ -946,18 +950,250 @@ async function loadHrAttendanceLogs() {
                 </tr>
             `;
         });
+    } else if (error) {
+        console.error('Error loading HR attendance logs:', error);
+        tbody.innerHTML = `<tr><td colspan="4" class="py-4 px-4 text-center text-rose-700">โหลดข้อมูลการมาปฏิบัติงานไม่สำเร็จ กรุณาลองใหม่</td></tr>`;
+        return;
     } else {
         tbody.innerHTML = `<tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ยังไม่มีข้อมูลการมาปฏิบัติงานในระบบ</td></tr>`;
     }
+
+    updateHrAttendancePeriodControls();
+    filterHrTable();
+    loadHrDailySummary();
+}
+
+async function loadHrDailySummary() {
+    const presentCard = document.getElementById('hr-summary-present');
+    const lateCard = document.getElementById('hr-summary-late');
+    const leaveCard = document.getElementById('hr-summary-leave');
+    if (!presentCard || !lateCard || !leaveCard) return;
+
+    try {
+        const { dateKey, start, end } = getSchoolDayBounds(new Date());
+        const [
+            { data: attendanceRows, error: attendanceError },
+            { data: offCampusRows, error: offCampusError },
+            { data: leaveApplicationRows, error: leaveApplicationError }
+        ] = await Promise.all([
+            supabaseClient.from('attendance_logs')
+                .select('staff_id, status')
+                .gte('check_in', start.toISOString())
+                .lt('check_in', end.toISOString()),
+            supabaseClient.from('leave_requests')
+                .select('staff_id')
+                .eq('leave_date', dateKey)
+                .eq('status', 'อนุมัติ'),
+            supabaseClient.from('leave_applications')
+                .select('staff_id')
+                .lte('start_date', dateKey)
+                .gte('end_date', dateKey)
+                .eq('status', 'อนุมัติ')
+        ]);
+
+        if (attendanceError || offCampusError || leaveApplicationError) {
+            console.error('Could not load HR daily summary:', {
+                attendanceError,
+                offCampusError,
+                leaveApplicationError
+            });
+            throw new Error('Daily attendance summary query failed');
+        }
+
+        const attendedStaff = new Set((attendanceRows || []).map(row => row.staff_id));
+        const lateStaff = new Set((attendanceRows || [])
+            .filter(row => row.status === 'มาสาย')
+            .map(row => row.staff_id));
+        const leaveStaff = new Set([
+            ...(offCampusRows || []).map(row => row.staff_id),
+            ...(leaveApplicationRows || []).map(row => row.staff_id)
+        ]);
+
+        presentCard.innerHTML = `${attendedStaff.size} <span class="text-xs font-normal">คน</span>`;
+        lateCard.innerHTML = `${lateStaff.size} <span class="text-xs font-normal">คน</span>`;
+        leaveCard.innerHTML = `${leaveStaff.size} <span class="text-xs font-normal">คน</span>`;
+    } catch (error) {
+        console.error('Could not load HR daily summary:', error);
+        [presentCard, lateCard, leaveCard].forEach(card => { card.textContent = 'โหลดไม่สำเร็จ'; });
+        showNotification('โหลดสรุปการปฏิบัติงานวันนี้ไม่สำเร็จ', 'error');
+    }
+}
+
+function setHrAttendancePeriod(period) {
+    const dateInput = document.getElementById('hr-period-date');
+    if (dateInput && period !== hrAttendancePeriod) {
+        if (period === 'monthly') {
+            dateInput.type = 'month';
+            dateInput.value = dateInput.value.slice(0, 7);
+        } else {
+            if (dateInput.value.length === 7) dateInput.value = `${dateInput.value}-01`;
+            dateInput.type = 'date';
+        }
+    }
+    hrAttendancePeriod = period;
+    updateHrAttendancePeriodControls();
+    filterHrTable();
+}
+
+function updateHrAttendancePeriodControls() {
+    const dateInput = document.getElementById('hr-period-date');
+    const dateLabel = document.getElementById('hr-period-date-label');
+    const description = document.getElementById('hr-period-description');
+    if (!dateInput || !dateLabel || !description) return;
+
+    if (!dateInput.value) {
+        const today = getLocalDateKey(new Date());
+        dateInput.value = hrAttendancePeriod === 'monthly' ? today.slice(0, 7) : today;
+    }
+    dateLabel.textContent = hrAttendancePeriod === 'monthly'
+        ? 'เลือกเดือน'
+        : hrAttendancePeriod === 'daily' ? 'เลือกวันที่' : 'ถึงวันที่';
+
+    const selectedDate = getSelectedHrPeriodDate(dateInput.value);
+    if (!selectedDate) {
+        description.textContent = 'กรุณาเลือกวันที่เพื่อแสดงข้อมูล';
+    } else if (hrAttendancePeriod === 'daily') {
+        description.textContent = `แสดงรายการลงเวลาของวันที่ ${selectedDate.toLocaleDateString('th-TH', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        })}`;
+    } else if (hrAttendancePeriod === 'monthly') {
+        description.textContent = `แสดงรายการลงเวลาของเดือน ${selectedDate.toLocaleDateString('th-TH', {
+            month: 'long',
+            year: 'numeric'
+        })}`;
+    } else {
+        const startDate = getSixMonthRangeStart(selectedDate);
+        description.textContent = `แสดงรายการตั้งแต่ ${startDate.toLocaleDateString('th-TH')} ถึง ${selectedDate.toLocaleDateString('th-TH')} (ย้อนหลัง 6 เดือน)`;
+    }
+
+    ['daily', 'monthly', 'six-months'].forEach(period => {
+        const button = document.getElementById(`hr-period-${period}`);
+        if (!button) return;
+        const isActive = period === hrAttendancePeriod;
+        button.className = isActive
+            ? 'rounded-xl bg-rose-900 px-4 py-2 text-xs font-semibold text-white'
+            : 'rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200';
+        button.setAttribute('aria-pressed', String(isActive));
+    });
+}
+
+function parseLocalDateInput(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function getSelectedHrPeriodDate(value) {
+    return parseLocalDateInput(hrAttendancePeriod === 'monthly' ? `${value}-01` : value);
+}
+
+function getLocalDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getSchoolDayBounds(date) {
+    const dateParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(date).reduce((parts, part) => {
+        if (part.type !== 'literal') parts[part.type] = Number(part.value);
+        return parts;
+    }, {});
+    const dateKey = `${dateParts.year}-${String(dateParts.month).padStart(2, '0')}-${String(dateParts.day).padStart(2, '0')}`;
+    const start = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day) - 7 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { dateKey, start, end };
+}
+
+async function checkAttendanceEligibility(scanType) {
+    const { start, end } = getSchoolDayBounds(new Date());
+    const { data, error } = await supabaseClient
+        .from('attendance_logs')
+        .select('id, check_out')
+        .eq('staff_id', currentUser.staff_id)
+        .gte('check_in', start.toISOString())
+        .lt('check_in', end.toISOString())
+        .limit(2);
+
+    if (error) {
+        console.error('Could not verify today attendance record:', error);
+        return { allowed: false, message: 'ตรวจสอบรายการลงเวลาวันนี้ไม่สำเร็จ กรุณาลองอีกครั้ง' };
+    }
+
+    if (scanType === 'check_in' && data.length > 0) {
+        return { allowed: false, message: 'วันนี้ลงเวลาเข้างานแล้ว สามารถลงเวลาเข้าได้วันละ 1 ครั้ง' };
+    }
+
+    if (scanType === 'check_out' && data.length > 1) {
+        return { allowed: false, message: 'พบรายการเข้างานวันนี้ซ้ำ กรุณาติดต่อฝ่ายบุคคลเพื่อตรวจสอบก่อนลงเวลาออก' };
+    }
+
+    if (scanType === 'check_out' && data.length === 0) {
+        return { allowed: false, message: 'ไม่พบรายการเข้างานของวันนี้ จึงยังลงเวลาออกไม่ได้' };
+    }
+
+    if (scanType === 'check_out' && data[0].check_out) {
+        return { allowed: false, message: 'วันนี้ลงเวลาออกงานแล้ว สามารถลงเวลาออกได้วันละ 1 ครั้ง' };
+    }
+
+    return { allowed: true, row: data[0] || null };
+}
+
+function getSixMonthRangeStart(endDate) {
+    const targetMonth = endDate.getMonth() - 6;
+    const targetMonthLastDay = new Date(endDate.getFullYear(), targetMonth + 1, 0).getDate();
+    return new Date(
+        endDate.getFullYear(),
+        targetMonth,
+        Math.min(endDate.getDate(), targetMonthLastDay)
+    );
 }
 
 function filterHrTable() {
-    const input = document.getElementById('hr-search-input').value.toLowerCase();
-    const rows = document.querySelectorAll('#hr-attendance-list tr');
+    const searchInput = document.getElementById('hr-search-input');
+    const dateInput = document.getElementById('hr-period-date');
+    const tbody = document.getElementById('hr-attendance-list');
+    if (!searchInput || !dateInput || !tbody) return;
+
+    updateHrAttendancePeriodControls();
+    const input = searchInput.value.toLowerCase();
+    const selectedDate = getSelectedHrPeriodDate(dateInput.value);
+    const selectedDateKey = selectedDate ? getLocalDateKey(selectedDate) : '';
+    const selectedMonthKey = selectedDateKey.slice(0, 7);
+    const rangeStartKey = selectedDate ? getLocalDateKey(getSixMonthRangeStart(selectedDate)) : '';
+    const rows = tbody.querySelectorAll('tr[data-check-in-date]');
+    let visibleCount = 0;
+
     rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        row.style.display = text.includes(input) ? '' : 'none';
+        const dateKey = row.dataset.checkInDate;
+        const matchesPeriod = selectedDate && (hrAttendancePeriod === 'daily'
+            ? dateKey === selectedDateKey
+            : hrAttendancePeriod === 'monthly'
+                ? dateKey.slice(0, 7) === selectedMonthKey
+                : dateKey >= rangeStartKey && dateKey <= selectedDateKey);
+        const matchesSearch = row.innerText.toLowerCase().includes(input);
+        row.style.display = matchesPeriod && matchesSearch ? '' : 'none';
+        if (matchesPeriod && matchesSearch) visibleCount++;
     });
+
+    let emptyRow = document.getElementById('hr-attendance-filter-empty');
+    if (rows.length > 0 && visibleCount === 0) {
+        if (!emptyRow) {
+            emptyRow = document.createElement('tr');
+            emptyRow.id = 'hr-attendance-filter-empty';
+            emptyRow.innerHTML = '<td colspan="4" class="py-4 px-4 text-center text-slate-400">ไม่พบข้อมูลในช่วงเวลาที่เลือก</td>';
+            tbody.append(emptyRow);
+        }
+    } else {
+        emptyRow?.remove();
+    }
 }
 
 // 3. บันทึกเวลาเข้างาน
@@ -992,6 +1228,15 @@ async function startAttendanceScan(scanType) {
     const cameraPromise = startCheckInCamera();
 
     try {
+        const eligibility = await checkAttendanceEligibility(scanType);
+        if (!eligibility.allowed) {
+            stopCheckInCamera();
+            cameraPromise.then(stopCheckInCamera);
+            closeCheckInModal();
+            showNotification(eligibility.message, 'error');
+            return;
+        }
+
         if (!SCHOOL_LOCATION) {
             checkInLocationVerified = true;
             locationStatus.textContent = 'ยังไม่ได้กำหนดพิกัดโรงเรียน — ปิดตรวจ GPS ชั่วคราว';
@@ -1175,30 +1420,52 @@ async function confirmCheckIn() {
     let error;
     let status;
     let updatedRows;
+    const eligibility = await checkAttendanceEligibility(attendanceScanType);
+
+    if (!eligibility.allowed) {
+        showCheckInError(eligibility.message);
+        return;
+    }
 
     if (attendanceScanType === 'check_in') {
-        const hours = now.getHours();
-        const minutes = now.getMinutes();
+        const timeParts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Bangkok',
+            hour: '2-digit',
+            minute: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(now).reduce((parts, part) => {
+            if (part.type !== 'literal') parts[part.type] = Number(part.value);
+            return parts;
+        }, {});
+        const hours = timeParts.hour;
+        const minutes = timeParts.minute;
         status = (hours > 8 || (hours === 8 && minutes > 0)) ? 'มาสาย' : 'มาตรงเวลา';
         ({ error } = await supabaseClient
             .from('attendance_logs')
             .insert([{ staff_id: currentUser.staff_id, check_in: now.toISOString(), status }]));
     } else {
+        const { start, end } = getSchoolDayBounds(now);
         ({ data: updatedRows, error } = await supabaseClient
             .from('attendance_logs')
             .update({ check_out: now.toISOString() })
+            .eq('id', eligibility.row.id)
             .eq('staff_id', currentUser.staff_id)
+            .gte('check_in', start.toISOString())
+            .lt('check_in', end.toISOString())
             .is('check_out', null)
             .select('check_in'));
     }
 
     if (error) {
-        showCheckInError('เกิดข้อผิดพลาดในการบันทึกเวลา กรุณาลองอีกครั้ง');
+        console.error('Could not save attendance scan:', error);
+        showCheckInError(error.code === '23505'
+            ? 'วันนี้ลงเวลาเข้างานแล้ว สามารถลงเวลาเข้าได้วันละ 1 ครั้ง'
+            : 'เกิดข้อผิดพลาดในการบันทึกเวลา กรุณาลองอีกครั้ง');
         return;
     }
 
     if (attendanceScanType === 'check_out' && !updatedRows?.length) {
-        showCheckInError('ไม่พบรายการเข้างานที่ยังไม่ได้ลงเวลาออก');
+        showCheckInError('รายการเข้างานวันนี้ไม่มี หรือได้ลงเวลาออกไปแล้ว');
         return;
     }
 
@@ -1207,6 +1474,7 @@ async function confirmCheckIn() {
         ? `บันทึกเวลาเข้างานสำเร็จ (${status})`
         : 'บันทึกเวลาออกงานสำเร็จ');
     loadAttendanceHistory();
+    if (currentUser.role === 'hr') loadHrAttendanceLogs();
 }
 
 function showCheckInError(message) {
