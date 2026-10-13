@@ -14,6 +14,7 @@ let checkInLocationVerified = false;
 let checkInCameraReady = false;
 let attendanceScanType = 'check_in';
 let notificationTimeout = null;
+let bellPopupTimeout = null;
 let realtimeChannel = null;
 let bellNotifications = [];
 let nextBellNotificationId = 1;
@@ -90,7 +91,7 @@ function renderBellNotifications() {
 function addBellNotification(title, message, targetTab = null, key = null) {
     if (key && bellNotifications.some(notification => notification.key === key)) return;
 
-    bellNotifications.unshift({
+    const notification = {
         id: nextBellNotificationId++,
         title,
         message,
@@ -98,10 +99,49 @@ function addBellNotification(title, message, targetTab = null, key = null) {
         key,
         createdAt: new Date(),
         read: false
-    });
+    };
+    bellNotifications.unshift(notification);
     bellNotifications = bellNotifications.slice(0, 30);
     saveBellNotifications();
     renderBellNotifications();
+    showBellNotificationPopup(notification);
+}
+
+function showBellNotificationPopup(notification) {
+    const popup = document.getElementById('notification-bell-popup');
+    if (!popup) return;
+
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'notification-bell-popup-content';
+    openButton.addEventListener('click', () => openBellNotification(notification.id));
+
+    const title = document.createElement('span');
+    title.className = 'block text-sm font-bold text-slate-800';
+    title.textContent = notification.title;
+    const message = document.createElement('span');
+    message.className = 'mt-0.5 block text-sm text-slate-600';
+    message.textContent = notification.message;
+    openButton.append(title, message);
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'notification-bell-popup-close';
+    closeButton.setAttribute('aria-label', 'ปิดการแจ้งเตือนใหม่');
+    closeButton.textContent = '×';
+    closeButton.addEventListener('click', dismissBellNotificationPopup);
+
+    popup.replaceChildren(openButton, closeButton);
+    popup.classList.remove('hidden');
+    clearTimeout(bellPopupTimeout);
+    bellPopupTimeout = setTimeout(dismissBellNotificationPopup, 7000);
+}
+
+function dismissBellNotificationPopup() {
+    const popup = document.getElementById('notification-bell-popup');
+    if (popup) popup.classList.add('hidden');
+    clearTimeout(bellPopupTimeout);
+    bellPopupTimeout = null;
 }
 
 function restoreBellNotifications(staffId) {
@@ -122,6 +162,7 @@ function restoreBellNotifications(staffId) {
     }
     document.getElementById('notification-bell-panel').classList.add('hidden');
     document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    dismissBellNotificationPopup();
     renderBellNotifications();
 }
 
@@ -143,6 +184,7 @@ function resetBellNotifications() {
     nextBellNotificationId = 1;
     document.getElementById('notification-bell-panel').classList.add('hidden');
     document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    dismissBellNotificationPopup();
     renderBellNotifications();
 }
 
@@ -167,6 +209,7 @@ function openBellNotification(notificationId) {
 
     document.getElementById('notification-bell-panel').classList.add('hidden');
     document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+    dismissBellNotificationPopup();
     if (notification.targetTab) switchTab(notification.targetTab);
 }
 
