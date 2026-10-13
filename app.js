@@ -1538,10 +1538,48 @@ async function loadExecutiveReport() {
         document.getElementById('stat-ontime').innerHTML = `${totalOnTime} <span class="text-sm font-normal text-emerald-600">ครั้ง</span>`;
         document.getElementById('stat-late').innerHTML = `${totalLate} <span class="text-sm font-normal text-amber-600">ครั้ง</span>`;
         document.getElementById('stat-leave').innerHTML = `${totalLeave} <span class="text-sm font-normal text-rose-600">รายการ</span>`;
+        renderExecutiveReportChart(totalOnTime, totalLate, totalLeave);
 
     } catch (err) {
         console.error('Error loading executive report:', err);
     }
+}
+
+function renderExecutiveReportChart(totalOnTime, totalLate, totalLeave) {
+    const chart = document.getElementById('report-pie-chart');
+    const chartTotal = document.getElementById('report-chart-total');
+    if (!chart || !chartTotal) return;
+
+    const statistics = [
+        { label: 'มาตรงเวลา (รวม)', value: totalOnTime, color: '#059669', unit: 'ครั้ง', percentId: 'stat-ontime-percent' },
+        { label: 'มาสาย (รวม)', value: totalLate, color: '#d97706', unit: 'ครั้ง', percentId: 'stat-late-percent' },
+        { label: 'คำขอลา / ออกนอกพื้นที่ (รวม)', value: totalLeave, color: '#e11d48', unit: 'รายการ', percentId: 'stat-leave-percent' }
+    ];
+    const total = statistics.reduce((sum, statistic) => sum + statistic.value, 0);
+    let progress = 0;
+    const segments = statistics.map(statistic => {
+        const start = progress;
+        progress += total ? (statistic.value / total) * 100 : 0;
+        return `${statistic.color} ${start}% ${progress}%`;
+    });
+
+    chart.style.background = total ? `conic-gradient(${segments.join(', ')})` : '#e2e8f0';
+    chart.setAttribute(
+        'aria-label',
+        `โดนัทชาร์ตแสดงสัดส่วนสถิติรวม: ${statistics.map(statistic => {
+            const percentage = total ? (statistic.value / total) * 100 : 0;
+            return `${statistic.label} ${statistic.value} ${statistic.unit} (${percentage.toLocaleString('th-TH', { maximumFractionDigits: 1 })}%)`;
+        }).join(', ')}`
+    );
+    chartTotal.textContent = total.toLocaleString('th-TH');
+
+    statistics.forEach(statistic => {
+        const percentage = total ? (statistic.value / total) * 100 : 0;
+        const percentageElement = document.getElementById(statistic.percentId);
+        if (percentageElement) {
+            percentageElement.textContent = `${percentage.toLocaleString('th-TH', { maximumFractionDigits: 1 })}% ของทั้งหมด`;
+        }
+    });
 }
 
 // ฟังก์ชันกรองตารางรายงาน
