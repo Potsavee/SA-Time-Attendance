@@ -439,18 +439,25 @@ async function handleLogin(event) {
     try {
         const { data, error } = await supabaseClient
             .from('staff')
-            .select('*')
+            .select('staff_id, name, role')
             .eq('staff_id', staffIdInput)
             .eq('password', passwordInput);
 
-        console.log("ผลลัพธ์จาก Supabase:", data, error);
+        if (error) {
+            console.error('Login verification failed:', error);
+            errorBox.textContent = 'ตรวจสอบข้อมูลเข้าสู่ระบบไม่ได้ กรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ';
+            errorBox.classList.remove('hidden');
+            return;
+        }
 
-        if (error || !data || data.length === 0) {
+        if (!data || data.length === 0) {
+            errorBox.textContent = 'รหัสประจำตัวหรือรหัสผ่านไม่ถูกต้อง';
             errorBox.classList.remove('hidden');
             return;
         }
 
         if (data[0].role !== selectedRole) {
+            errorBox.textContent = 'บทบาทของบัญชีไม่ตรงกับบทบาทที่เลือก กรุณาเลือกบทบาทให้ถูกต้องหรือติดต่อผู้ดูแลระบบ';
             errorBox.classList.remove('hidden');
             return;
         }
@@ -514,6 +521,7 @@ async function handleLogin(event) {
 
     } catch (err) {
         console.error("Login Error:", err);
+        errorBox.textContent = 'เกิดข้อผิดพลาดขณะเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง';
         errorBox.classList.remove('hidden');
     }
 }
@@ -738,6 +746,14 @@ async function loadExecutiveRequests() {
         }))
     ];
 
+    const pendingRequests = requests.filter(row => row.status === 'รออนุมัติ');
+    const approvedRequests = requests.filter(row => row.status === 'อนุมัติ');
+    const rejectedRequests = requests.filter(row => row.status === 'ไม่อนุมัติ');
+    document.getElementById('exec-total-count').innerHTML = `${requests.length} <span class="text-xs font-normal text-slate-500">รายการ</span>`;
+    document.getElementById('exec-pending-count').innerHTML = `${pendingRequests.length} <span class="text-xs font-normal text-rose-600">รายการ</span>`;
+    document.getElementById('exec-approved-count').innerHTML = `${approvedRequests.length} <span class="text-xs font-normal text-emerald-600">รายการ</span>`;
+    document.getElementById('exec-rejected-count').innerHTML = `${rejectedRequests.length} <span class="text-xs font-normal text-amber-600">รายการ</span>`;
+
     if (requests.length > 0) {
         const newestFirst = requests
             .map((row, index) => ({ row, index, createdAt: Date.parse(row.created_at || '') }))
@@ -754,9 +770,6 @@ async function loadExecutiveRequests() {
             })
             .map(({ row }) => row);
 
-        const pendingRequests = newestFirst.filter(row => row.status === 'รออนุมัติ');
-        const approvedRequests = newestFirst.filter(row => row.status === 'อนุมัติ');
-        const rejectedRequests = newestFirst.filter(row => row.status === 'ไม่อนุมัติ');
         const otherRequests = newestFirst.filter(row =>
             !['รออนุมัติ', 'อนุมัติ', 'ไม่อนุมัติ'].includes(row.status)
         );
@@ -822,13 +835,10 @@ async function loadExecutiveRequests() {
                 '<tr><td colspan="6" class="py-3 px-4 text-center text-amber-700 bg-amber-50">โหลดคำร้องลาป่วย/ลากิจไม่ได้ ตรวจสอบว่าได้รัน migration และตั้งค่าสิทธิ์ตาราง leave_applications ใน Supabase แล้ว</td></tr>'
             ] : [])
         ].join('');
-
-        document.getElementById('exec-pending-count').innerHTML = `${pendingRequests.length} <span class="text-xs font-normal text-rose-600">รายการ</span>`;
     } else {
         tbody.innerHTML = leaveApplicationError
             ? '<tr><td colspan="6" class="py-4 px-4 text-center text-amber-700 bg-amber-50">โหลดคำร้องลาป่วย/ลากิจไม่ได้ ตรวจสอบว่าได้รัน migration และตั้งค่าสิทธิ์ตาราง leave_applications ใน Supabase แล้ว</td></tr><tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">ยังไม่มีคำขอออกนอกสถานศึกษา</td></tr>'
             : `<tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">ยังไม่มีรายการคำขอในระบบ</td></tr>`;
-        document.getElementById('exec-pending-count').innerHTML = `0 <span class="text-xs font-normal text-rose-600">รายการ</span>`;
     }
 
     document.getElementById('stat-leave').innerHTML = `${requests.length} <span class="text-sm font-normal text-rose-600">รายการ</span>`;
