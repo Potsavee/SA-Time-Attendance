@@ -117,7 +117,7 @@
                     <div class="flex items-center justify-center">
                         <img src="images/logo.png" alt="โลโก้โรงเรียนบางแพปฐมพิทยา" class="w-14 h-14 object-contain">
                     </div>
-                    <div>
+                    <div class="header-brand-text">
                         <h2 class="font-bold text-lg leading-tight">ระบบบริหารและบันทึกเวลาการทำงาน</h2>
                         <p class="text-xs text-rose-200">โรงเรียนบางแพปฐมพิทยา</p>
                     </div>
@@ -144,10 +144,38 @@
                         </div>
                         <div id="notification-bell-popup" class="notification-bell-popup hidden" role="status" aria-live="polite"></div>
                     </div>
-                    <span id="user-badge"
-                        class="px-3.5 py-1.5 bg-white text-rose-950 rounded-lg text-xs font-bold shadow-sm border border-rose-100"></span>
-                    <button onclick="handleLogout()"
-                        class="px-4 py-2 bg-rose-950/40 hover:bg-rose-950 text-rose-100 rounded-xl text-xs font-semibold transition border border-rose-700/50">ออกจากระบบ</button>
+                    <div id="user-menu-wrapper" class="user-menu-wrapper">
+                        <button id="user-menu-button" type="button" onclick="toggleUserMenu()"
+                            class="user-menu-button" aria-label="เมนูผู้ใช้" aria-expanded="false"
+                            aria-controls="user-menu-panel">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M20 21a8 8 0 0 0-16 0m8-10a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+                            </svg>
+                            <span id="user-menu-trigger-name" class="user-menu-trigger-name"></span>
+                            <svg class="user-menu-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m5 7.5 5 5 5-5" />
+                            </svg>
+                        </button>
+                        <div id="user-menu-panel" class="user-menu-panel hidden" aria-labelledby="user-menu-button">
+                            <div class="user-menu-info text-center">
+                                <span id="user-menu-avatar" class="user-menu-avatar" aria-hidden="true"></span>
+                                <p class="user-menu-label">ผู้ใช้งาน</p>
+                                <p id="user-menu-name" class="user-menu-name"></p>
+                                <p id="user-menu-role" class="user-menu-role"></p>
+                            </div>
+                            <button type="button" onclick="handleLogout()" class="user-menu-logout flex items-center gap-2 ">
+                                <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M10 17l5-5-5-5m5 5H3m9-9h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
+                                </svg>
+                                <span>ออกจากระบบ</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </header>

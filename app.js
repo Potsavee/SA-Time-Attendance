@@ -446,14 +446,34 @@ document.addEventListener('click', event => {
         document.getElementById('notification-bell-panel').classList.add('hidden');
         document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
     }
+
+    const userMenuWrapper = document.getElementById('user-menu-wrapper');
+    if (userMenuWrapper && !userMenuWrapper.contains(event.target)) closeUserMenu();
 });
 
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
         document.getElementById('notification-bell-panel').classList.add('hidden');
         document.getElementById('notification-bell-button').setAttribute('aria-expanded', 'false');
+        closeUserMenu();
     }
 });
+
+function toggleUserMenu() {
+    const button = document.getElementById('user-menu-button');
+    const panel = document.getElementById('user-menu-panel');
+    const isOpen = button.getAttribute('aria-expanded') === 'true';
+    panel.classList.toggle('hidden', isOpen);
+    button.setAttribute('aria-expanded', String(!isOpen));
+}
+
+function closeUserMenu() {
+    const button = document.getElementById('user-menu-button');
+    const panel = document.getElementById('user-menu-panel');
+    if (!button || !panel) return;
+    panel.classList.add('hidden');
+    button.setAttribute('aria-expanded', 'false');
+}
 
 function togglePasswordVisibility() {
     const passwordInput = document.getElementById('user-pass');
@@ -554,7 +574,10 @@ async function handleLogin(event) {
             loadStaffLeaveHistory();
         }
 
-        document.getElementById('user-badge').innerText = `ผู้ใช้งาน: ${currentUser.name} (${roleText})`;
+        document.getElementById('user-menu-trigger-name').textContent = currentUser.name;
+        document.getElementById('user-menu-avatar').textContent = currentUser.name.trim().charAt(0);
+        document.getElementById('user-menu-name').textContent = currentUser.name;
+        document.getElementById('user-menu-role').textContent = roleText;
         subscribeToRealtimeUpdates();
         try {
             await syncNotificationsOnLogin();
@@ -571,6 +594,7 @@ async function handleLogin(event) {
 }
 
 function handleLogout() {
+    closeUserMenu();
     stopRealtimeSubscriptions();
     staffLeaveHistoryLoadId += 1;
     notificationSyncPromise = null;

@@ -7,6 +7,126 @@ body {
     position: relative;
 }
 
+.user-menu-wrapper {
+    position: relative;
+}
+
+.user-menu-button {
+    display: flex;
+    width: auto;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+    border: 1px solid rgb(255 255 255 / 20%);
+    border-radius: 0.75rem;
+    color: white;
+    transition: background-color 150ms ease;
+}
+
+.user-menu-trigger-name {
+    max-width: 12rem;
+    overflow: hidden;
+    color: white;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-menu-button:hover,
+.user-menu-button[aria-expanded="true"] {
+    background: rgb(255 255 255 / 12%);
+}
+
+.user-menu-chevron {
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    transition: transform 150ms ease;
+}
+
+.user-menu-button[aria-expanded="true"] .user-menu-chevron {
+    transform: rotate(180deg);
+}
+
+.user-menu-button:focus-visible,
+.user-menu-logout:focus-visible {
+    outline: 2px solid #fcd34d;
+    outline-offset: 2px;
+}
+
+.user-menu-panel {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    right: 0;
+    z-index: 60;
+    width: min(14rem, calc(100vw - 2rem));
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: white;
+    color: #334155;
+    box-shadow: 0 16px 40px rgb(15 23 42 / 20%);
+}
+
+.user-menu-panel.hidden {
+    display: none;
+}
+
+.user-menu-info {
+    padding: 1rem;
+}
+
+.user-menu-avatar {
+    display: flex;
+    width: 3.25rem;
+    height: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.75rem;
+    border: 2px solid #fde68a;
+    border-radius: 9999px;
+    background: #881337;
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.user-menu-label,
+.user-menu-role {
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.user-menu-name {
+    margin-top: 0.25rem;
+    color: #1e293b;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.user-menu-role {
+    margin-top: 0.125rem;
+}
+
+.user-menu-logout {
+    width: 100%;
+    border-top: 1px solid #f1f5f9;
+    padding: 0.75rem 1rem;
+    color: #be123c;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.user-menu-logout:hover {
+    background: #fff1f2;
+}
+
 .notification-bell-button {
     position: relative;
     display: flex;
@@ -247,16 +367,16 @@ body {
     }
 
     #app-section > header > .container {
-        height: 8.5rem;
-        min-height: 8.5rem;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
+        height: 4.5rem;
+        min-height: 4.5rem;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
     }
 
     #app-section > header > .container > div:first-child {
-        gap: 0.625rem;
+        flex: 0 0 auto;
     }
 
     #app-section > header > .container > div:first-child img {
@@ -264,22 +384,15 @@ body {
         height: 2.75rem;
     }
 
-    #app-section > header h2 {
-        font-size: 0.9375rem;
-        line-height: 1.35;
-    }
-
     #app-section > header > .container > div:last-child {
         justify-content: flex-end;
         gap: 0.5rem;
+        flex-wrap: nowrap;
+        min-width: 0;
     }
 
-    #app-section > header #user-badge {
-        min-width: 0;
-        max-width: 45vw;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    .user-menu-trigger-name {
+        max-width: min(32vw, 8rem);
     }
 
     #app-section > main {
@@ -354,17 +467,23 @@ body {
     }
 }
 
+@media (max-width: 600px) {
+    .header-brand-text {
+        display: none;
+    }
+}
+
 @media (max-width: 380px) {
+    .user-menu-trigger-name {
+        max-width: 24vw;
+    }
+
     #app-section > header > .container > div:last-child {
         flex-wrap: nowrap;
     }
 
     #app-section > header > .container > div:last-child > button:last-child {
         padding-inline: 0.75rem;
-    }
-
-    #app-section > header #user-badge {
-        max-width: 28vw;
     }
 
     #app-section main .grid {
