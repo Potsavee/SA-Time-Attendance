@@ -533,6 +533,7 @@ async function handleLogin(event) {
 
         document.getElementById('login-section').classList.add('hidden');
         document.getElementById('app-section').classList.remove('hidden');
+        syncSidebarViewport();
         
         const tabExec = document.getElementById('tab-executive-overview');
         const tabHr = document.getElementById('tab-hr-management');
@@ -802,10 +803,34 @@ function toggleRequestMenu() {
 function toggleSidebar() {
     const appSection = document.getElementById('app-section');
     const toggleButton = document.getElementById('sidebar-toggle');
+    if (window.matchMedia('(max-width: 640px)').matches) {
+        const isOpen = appSection.classList.toggle('sidebar-mobile-open');
+        toggleButton.setAttribute('aria-expanded', String(isOpen));
+        toggleButton.setAttribute('aria-label', isOpen ? 'ปิดแถบเมนู' : 'เปิดแถบเมนู');
+        toggleButton.setAttribute('title', isOpen ? 'ปิดแถบเมนู' : 'เปิดแถบเมนู');
+        return;
+    }
+
     const isCollapsed = appSection.classList.toggle('sidebar-collapsed');
     toggleButton.setAttribute('aria-expanded', String(!isCollapsed));
     toggleButton.setAttribute('aria-label', isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู');
     toggleButton.setAttribute('title', isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู');
+}
+
+function syncSidebarViewport() {
+    const appSection = document.getElementById('app-section');
+    const toggleButton = document.getElementById('sidebar-toggle');
+    const isMobile = window.matchMedia('(max-width: 640px)').matches;
+
+    appSection.classList.remove('sidebar-mobile-open');
+    if (isMobile) appSection.classList.remove('sidebar-collapsed');
+
+    const isExpanded = isMobile
+        ? false
+        : !appSection.classList.contains('sidebar-collapsed');
+    toggleButton.setAttribute('aria-expanded', String(isExpanded));
+    toggleButton.setAttribute('aria-label', isExpanded ? 'ย่อแถบเมนู' : 'เปิดแถบเมนู');
+    toggleButton.setAttribute('title', isExpanded ? 'ย่อแถบเมนู' : 'เปิดแถบเมนู');
 }
 
 // 1. ผู้บริหารโหลดคำขอทั้งหมด
