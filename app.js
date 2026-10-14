@@ -23,6 +23,31 @@ let bellNotificationStorageKey = null;
 let notificationSyncPromise = null;
 let hrAttendancePeriod = 'daily';
 
+function deduplicateSidebarMenu() {
+    const nav = document.getElementById('nav-tabs');
+    if (!nav) return;
+
+    const seenIds = new Set();
+    nav.querySelectorAll('.sidebar-nav-item[id]').forEach(menuItem => {
+        if (seenIds.has(menuItem.id)) {
+            menuItem.remove();
+            return;
+        }
+        seenIds.add(menuItem.id);
+    });
+
+    nav.querySelectorAll('.sidebar-menu-group').forEach(group => {
+        if (!group.querySelector('.sidebar-group-toggle')) group.remove();
+    });
+}
+
+deduplicateSidebarMenu();
+window.addEventListener('focus', deduplicateSidebarMenu);
+window.addEventListener('pageshow', deduplicateSidebarMenu);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') deduplicateSidebarMenu();
+});
+
 function showNotification(message, type = 'success') {
     const toast = document.getElementById('notification-toast');
     const isError = type === 'error';
