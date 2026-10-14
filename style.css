@@ -227,3 +227,147 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
 }
+
+#app-section > header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+@media (max-width: 640px) {
+    #login-section {
+        align-items: flex-start;
+        padding: 1rem;
+    }
+
+    #login-section > div {
+        margin-block: auto;
+        padding: 1.5rem;
+        border-radius: 1.25rem;
+    }
+
+    #app-section > header > .container {
+        height: 8.5rem;
+        min-height: 8.5rem;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+    }
+
+    #app-section > header > .container > div:first-child {
+        gap: 0.625rem;
+    }
+
+    #app-section > header > .container > div:first-child img {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
+
+    #app-section > header h2 {
+        font-size: 0.9375rem;
+        line-height: 1.35;
+    }
+
+    #app-section > header > .container > div:last-child {
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    #app-section > header #user-badge {
+        min-width: 0;
+        max-width: 45vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #app-section > main {
+        padding: 1rem 0.75rem;
+    }
+
+    #nav-tabs {
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        margin-bottom: 1rem;
+        border-radius: 0.875rem;
+        scrollbar-width: thin;
+    }
+
+    #nav-tabs button {
+        flex: 0 0 auto;
+        min-height: 2.75rem;
+        padding-inline: 0.875rem;
+        white-space: nowrap;
+    }
+
+    #app-section main .bg-white.rounded-3xl,
+    #app-section main .bg-white.rounded-2xl {
+        padding: 1rem;
+        border-radius: 1rem;
+    }
+
+    #app-section main .overflow-x-auto {
+        max-width: 100%;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #app-section main .overflow-x-auto table {
+        min-width: 36rem;
+    }
+
+    #app-section main button,
+    #checkin-camera-modal button,
+    #checkin-photo-fallback {
+        min-height: 2.75rem;
+    }
+
+    #checkin-camera-modal {
+        align-items: flex-end;
+        padding: 0.75rem;
+    }
+
+    #checkin-camera-modal > div {
+        max-height: calc(100dvh - 1.5rem);
+        overflow-y: auto;
+        border-radius: 1.25rem;
+    }
+
+    #checkin-camera-modal > div > div:last-child > div:last-child {
+        flex-wrap: wrap;
+    }
+
+    #checkin-camera-modal > div > div:last-child > div:last-child > button,
+    #checkin-camera-modal > div > div:last-child > div:last-child > label {
+        flex: 1 1 auto;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .notification-toast {
+        top: max(0.75rem, env(safe-area-inset-top));
+        right: 0.75rem;
+        width: calc(100vw - 1.5rem);
+    }
+}
+
+@media (max-width: 380px) {
+    #app-section > header > .container > div:last-child {
+        flex-wrap: nowrap;
+    }
+
+    #app-section > header > .container > div:last-child > button:last-child {
+        padding-inline: 0.75rem;
+    }
+
+    #app-section > header #user-badge {
+        max-width: 28vw;
+    }
+
+    #app-section main .grid {
+        min-width: 0;
+    }
+}
