@@ -3,6 +3,13 @@ body {
     font-family: 'Sarabun', sans-serif;
 }
 
+.request-form-date {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
 .notification-bell-wrapper {
     position: relative;
 }
