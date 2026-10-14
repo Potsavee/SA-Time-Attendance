@@ -272,7 +272,7 @@ async function syncNotificationsOnLogin() {
     const { staff_id: staffId, role } = currentUser;
     const syncPromise = (async () => {
         if (role === 'executive') {
-            await syncNewRequestNotifications(staffId, role, 'leave_requests', 'executive-overview');
+            await syncNewRequestNotifications(staffId, role, 'gate_passes', 'executive-overview');
             await syncNewRequestNotifications(staffId, role, 'leave_applications', 'executive-overview');
         } else if (role === 'hr') {
             await syncNewAttendanceNotifications(staffId, role);
@@ -375,7 +375,7 @@ async function syncNewAttendanceNotifications(staffId, role) {
 }
 
 async function syncPersonalLeaveStatusNotifications(staffId, role) {
-    for (const table of ['leave_requests', 'leave_applications']) {
+    for (const table of ['gate_passes', 'leave_applications']) {
         const { data, error } = await supabaseClient
             .from(table)
             .select('id, status')
@@ -648,9 +648,9 @@ function subscribeToRealtimeUpdates() {
         .on('postgres_changes', {
             event: '*',
             schema: 'public',
-            table: 'leave_requests'
+            table: 'gate_passes'
         }, payload => {
-            notifyLeaveRealtimeChange(payload, 'leave_requests', subscribedStaffId);
+            notifyLeaveRealtimeChange(payload, 'gate_passes', subscribedStaffId);
             refreshLeaveRequestViews(subscribedStaffId);
         })
         .on('postgres_changes', {
@@ -785,7 +785,7 @@ async function loadExecutiveRequests() {
         { data: offCampusRequests, error: offCampusError },
         { data: leaveApplications, error: leaveApplicationError }
     ] = await Promise.all([
-        supabaseClient.from('leave_requests').select('*'),
+        supabaseClient.from('gate_passes').select('*'),
         supabaseClient.from('leave_applications').select('*')
     ]);
 
@@ -915,7 +915,7 @@ async function loadExecutiveRequests() {
 
 // ผู้บริหารอัปเดตสถานะคำขอ
 async function updateLeaveStatus(id, newStatus, requestKind = 'off_campus') {
-    const table = requestKind === 'leave_application' ? 'leave_applications' : 'leave_requests';
+    const table = requestKind === 'leave_application' ? 'leave_applications' : 'gate_passes';
     const { data, error } = await supabaseClient
         .from(table)
         .update({ status: newStatus })
@@ -1004,7 +1004,7 @@ async function loadHrDailySummary() {
                 .select('staff_id, status')
                 .gte('check_in', start.toISOString())
                 .lt('check_in', end.toISOString()),
-            supabaseClient.from('leave_requests')
+            supabaseClient.from('gate_passes')
                 .select('staff_id')
                 .eq('leave_date', dateKey)
                 .eq('status', 'อนุมัติ'),
@@ -1630,7 +1630,7 @@ async function submitLeave(event) {
 
     try {
         const { error } = await supabaseClient
-            .from('leave_requests')
+            .from('gate_passes')
             .insert([{
                 staff_id: currentUser.staff_id,
                 reason: reason,
@@ -1716,7 +1716,7 @@ async function loadStaffLeaveHistory() {
         { data: offCampusRequests, error: offCampusError },
         { data: leaveApplications, error: leaveApplicationError }
     ] = await Promise.all([
-        supabaseClient.from('leave_requests').select('*').eq('staff_id', staffId),
+        supabaseClient.from('gate_passes').select('*').eq('staff_id', staffId),
         supabaseClient.from('leave_applications').select('*').eq('staff_id', staffId)
     ]);
 
@@ -1803,7 +1803,7 @@ async function loadExecutiveReport() {
 
         // 3. ดึงข้อมูลคำขอลาทั้งหมด
         const { data: leaveList, error: leaveError } = await supabaseClient
-            .from('leave_requests')
+            .from('gate_passes')
             .select('*');
 
         const { data: leaveApplications, error: leaveApplicationError } = await supabaseClient
