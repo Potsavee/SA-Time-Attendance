@@ -1053,38 +1053,28 @@ async function loadHrAttendanceLogs() {
 }
 
 async function loadHrDailySummary() {
+    const totalCard = document.getElementById('hr-summary-total');
     const presentCard = document.getElementById('hr-summary-present');
     const lateCard = document.getElementById('hr-summary-late');
-    const leaveCard = document.getElementById('hr-summary-leave');
-    if (!presentCard || !lateCard || !leaveCard) return;
+    if (!totalCard || !presentCard || !lateCard) return;
 
     try {
-        const { dateKey, start, end } = getSchoolDayBounds(new Date());
+        const { start, end } = getSchoolDayBounds(new Date());
         const [
             { data: attendanceRows, error: attendanceError },
-            { data: offCampusRows, error: offCampusError },
-            { data: leaveApplicationRows, error: leaveApplicationError }
+            { count: staffCount, error: staffError }
         ] = await Promise.all([
             supabaseClient.from('attendance_logs')
                 .select('staff_id, status')
                 .gte('check_in', start.toISOString())
                 .lt('check_in', end.toISOString()),
-            supabaseClient.from('gate_passes')
-                .select('staff_id')
-                .eq('leave_date', dateKey)
-                .eq('status', 'อนุมัติ'),
-            supabaseClient.from('leave_applications')
-                .select('staff_id')
-                .lte('start_date', dateKey)
-                .gte('end_date', dateKey)
-                .eq('status', 'อนุมัติ')
+            supabaseClient.from('staff').select('staff_id', { count: 'exact', head: true })
         ]);
 
-        if (attendanceError || offCampusError || leaveApplicationError) {
+        if (attendanceError || staffError) {
             console.error('Could not load HR daily summary:', {
                 attendanceError,
-                offCampusError,
-                leaveApplicationError
+                staffError
             });
             throw new Error('Daily attendance summary query failed');
         }
@@ -1093,17 +1083,13 @@ async function loadHrDailySummary() {
         const lateStaff = new Set((attendanceRows || [])
             .filter(row => row.status === 'มาสาย')
             .map(row => row.staff_id));
-        const leaveStaff = new Set([
-            ...(offCampusRows || []).map(row => row.staff_id),
-            ...(leaveApplicationRows || []).map(row => row.staff_id)
-        ]);
 
+        totalCard.innerHTML = `${staffCount ?? 0} <span class="text-xs font-normal">คน</span>`;
         presentCard.innerHTML = `${attendedStaff.size} <span class="text-xs font-normal">คน</span>`;
         lateCard.innerHTML = `${lateStaff.size} <span class="text-xs font-normal">คน</span>`;
-        leaveCard.innerHTML = `${leaveStaff.size} <span class="text-xs font-normal">คน</span>`;
     } catch (error) {
         console.error('Could not load HR daily summary:', error);
-        [presentCard, lateCard, leaveCard].forEach(card => { card.textContent = 'โหลดไม่สำเร็จ'; });
+        [totalCard, presentCard, lateCard].forEach(card => { card.textContent = 'โหลดไม่สำเร็จ'; });
         showNotification('โหลดสรุปการปฏิบัติงานวันนี้ไม่สำเร็จ', 'error');
     }
 }

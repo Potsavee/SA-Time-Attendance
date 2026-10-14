@@ -4,10 +4,13 @@ body {
 }
 
 .request-form-date {
+    display: block;
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
 }
 
 .notification-bell-wrapper {
@@ -706,6 +709,23 @@ body {
 
     .user-menu-trigger-name {
         max-width: min(32vw, 8rem);
+    }
+
+    .request-form-date {
+        font-size: 16px;
+        padding-inline: 0.75rem;
+    }
+
+    .notification-bell-panel,
+    .notification-bell-popup {
+        position: fixed;
+        top: calc(5.25rem + env(safe-area-inset-top));
+        right: 0.75rem;
+        left: 0.75rem;
+        width: auto;
+        max-width: 26rem;
+        margin-inline: auto;
+        box-sizing: border-box;
     }
 
     #app-section > main {
