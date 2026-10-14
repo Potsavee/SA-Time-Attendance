@@ -455,12 +455,34 @@ function initializeLeaveTimePickers() {
     resetLeaveTimePickers();
 }
 
+function initializeRequestDatepickers() {
+    const dateInputs = document.querySelectorAll('.request-form-date');
+    if (typeof flatpickr !== 'function') {
+        dateInputs.forEach(input => { input.type = 'date'; });
+        return;
+    }
+
+    dateInputs.forEach(input => {
+        flatpickr(input, {
+            dateFormat: 'Y-m-d',
+            locale: flatpickr.l10ns.th || flatpickr.l10ns.default,
+            disableMobile: true,
+            static: true,
+            onReady: (_selectedDates, _dateString, instance) => {
+                instance._input.parentElement.classList.add('request-date-picker-wrap');
+                instance.calendarContainer.classList.add('request-date-calendar');
+            }
+        });
+    });
+}
+
 function resetLeaveTimePickers() {
     document.getElementById('leave-time-out').value = DEFAULT_LEAVE_START_TIME;
     document.getElementById('leave-time-return').value = DEFAULT_LEAVE_RETURN_TIME;
 }
 
 initializeLeaveTimePickers();
+initializeRequestDatepickers();
 
 let currentUser = null;
 let staffLeaveHistoryLoadId = 0;
