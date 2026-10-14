@@ -398,7 +398,7 @@ async function syncPersonalLeaveStatusNotifications(staffId, role) {
                 addBellNotification(
                     'มีการอัปเดตผลคำร้อง',
                     `สถานะ: ${row.status} · ${table === 'leave_applications' ? 'คำร้องลาป่วย/ลากิจ' : 'คำขอออกนอกสถานศึกษา'}`,
-                    'leave',
+                    'leave-history',
                     `${table}:${row.id}:status:${row.status}`
                 );
             });
@@ -538,6 +538,9 @@ async function handleLogin(event) {
         const tabHr = document.getElementById('tab-hr-management');
         const tabCheckin = document.getElementById('tab-checkin');
         const tabLeave = document.getElementById('tab-leave');
+        const tabGatePass = document.getElementById('tab-gate-pass');
+        const tabLeaveHistory = document.getElementById('tab-leave-history');
+        const requestMenuGroup = document.getElementById('request-menu-group');
         const tabReportBtn = document.getElementById('tab-report');
         let roleText = '';
 
@@ -547,6 +550,9 @@ async function handleLogin(event) {
             tabHr.classList.add('hidden');
             tabCheckin.classList.add('hidden');
             tabLeave.classList.add('hidden');
+            tabGatePass.classList.add('hidden');
+            tabLeaveHistory.classList.add('hidden');
+            requestMenuGroup.classList.add('hidden');
             if (tabReportBtn) tabReportBtn.classList.remove('hidden');
             switchTab('executive-overview');
             loadExecutiveRequests();
@@ -557,6 +563,9 @@ async function handleLogin(event) {
             tabHr.classList.remove('hidden');
             tabCheckin.classList.remove('hidden');
             tabLeave.classList.remove('hidden');
+            tabGatePass.classList.remove('hidden');
+            tabLeaveHistory.classList.remove('hidden');
+            requestMenuGroup.classList.remove('hidden');
             if (tabReportBtn) tabReportBtn.classList.add('hidden');
             switchTab('checkin');
             loadHrAttendanceLogs();
@@ -568,6 +577,9 @@ async function handleLogin(event) {
             tabHr.classList.add('hidden');
             tabCheckin.classList.remove('hidden');
             tabLeave.classList.remove('hidden');
+            tabGatePass.classList.remove('hidden');
+            tabLeaveHistory.classList.remove('hidden');
+            requestMenuGroup.classList.remove('hidden');
             if (tabReportBtn) tabReportBtn.classList.add('hidden');
             switchTab('checkin');
             loadAttendanceHistory();
@@ -714,7 +726,7 @@ function notifyLeaveRealtimeChange(payload, table, subscribedStaffId) {
         addBellNotification(
             'มีการอัปเดตผลคำร้อง',
             `สถานะ: ${newRow.status} · ${isLeaveApplication ? 'คำร้องลาป่วย/ลากิจ' : 'คำขอออกนอกสถานศึกษา'}`,
-            'leave',
+            'leave-history',
             newRow.id ? `${table}:${newRow.id}:status:${newRow.status}` : null
         );
     }
@@ -747,15 +759,16 @@ function stopRealtimeSubscriptions() {
 }
 
 function switchTab(tabName) {
-    const tabs = ['executive-overview', 'hr-management', 'checkin', 'leave', 'report'];
+    const tabs = ['executive-overview', 'hr-management', 'checkin', 'leave', 'gate-pass', 'leave-history', 'report'];
     
     tabs.forEach(t => {
         const contentEl = document.getElementById('content-' + t);
         if (contentEl) contentEl.classList.add('hidden');
         
         const btn = document.getElementById('tab-' + t);
-        if (btn && !btn.classList.contains('hidden')) {
-            btn.className = "px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition";
+        if (btn) {
+            btn.classList.remove('is-active');
+            btn.removeAttribute('aria-current');
         }
     });
     
@@ -764,8 +777,35 @@ function switchTab(tabName) {
     
     const activeBtn = document.getElementById('tab-' + tabName);
     if (activeBtn && !activeBtn.classList.contains('hidden')) {
-        activeBtn.className = "px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition";
+        activeBtn.classList.add('is-active');
+        activeBtn.setAttribute('aria-current', 'page');
     }
+
+    const requestMenuButton = document.getElementById('tab-request-menu');
+    const requestSubmenu = document.getElementById('request-submenu');
+    const isRequestPage = ['leave', 'gate-pass', 'leave-history'].includes(tabName);
+    requestMenuButton.classList.toggle('is-active', isRequestPage);
+    if (isRequestPage) {
+        requestSubmenu.hidden = false;
+        requestMenuButton.setAttribute('aria-expanded', 'true');
+    }
+}
+
+function toggleRequestMenu() {
+    const requestMenuButton = document.getElementById('tab-request-menu');
+    const requestSubmenu = document.getElementById('request-submenu');
+    const isExpanded = requestMenuButton.getAttribute('aria-expanded') !== 'true';
+    requestMenuButton.setAttribute('aria-expanded', String(isExpanded));
+    requestSubmenu.hidden = !isExpanded;
+}
+
+function toggleSidebar() {
+    const appSection = document.getElementById('app-section');
+    const toggleButton = document.getElementById('sidebar-toggle');
+    const isCollapsed = appSection.classList.toggle('sidebar-collapsed');
+    toggleButton.setAttribute('aria-expanded', String(!isCollapsed));
+    toggleButton.setAttribute('aria-label', isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู');
+    toggleButton.setAttribute('title', isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู');
 }
 
 // 1. ผู้บริหารโหลดคำขอทั้งหมด

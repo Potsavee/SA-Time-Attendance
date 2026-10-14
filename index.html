@@ -110,16 +110,95 @@
     </div>
 
     <!-- 2. หน้าหลัก (Dashboard) -->
-    <div id="app-section" class="hidden min-h-screen flex flex-col">
+    <div id="app-section" class="hidden min-h-screen">
+        <aside id="app-sidebar" class="app-sidebar" aria-label="เมนูหลัก">
+            <div class="sidebar-brand">
+                <img src="images/logo.png" alt="โลโก้โรงเรียนบางแพปฐมวิทยา" class="sidebar-logo">
+                <div class="sidebar-brand-copy">
+                    <p class="sidebar-brand-name">โรงเรียนบางแพปฐมวิทยา</p>
+                    <p class="sidebar-brand-caption">ระบบบริหารและบันทึกเวลาทำงาน</p>
+                </div>
+            </div>
+            <nav id="nav-tabs" class="sidebar-nav">
+                <button onclick="switchTab('checkin')" id="tab-checkin" class="hidden sidebar-nav-item" title="ลงเวลาทำงาน">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m9 16 2 2 4-4" />
+                    </svg>
+                    <span>ลงเวลาทำงาน</span>
+                </button>
+                <div id="request-menu-group" class="sidebar-menu-group hidden">
+                    <button type="button" id="tab-request-menu" class="sidebar-nav-item sidebar-group-toggle"
+                        onclick="toggleRequestMenu()" aria-expanded="true" aria-controls="request-submenu"
+                        title="คำร้องลา / ขอออกนอกสถานศึกษา">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14 3v6h6M8 13h8m-8 4h6" />
+                        </svg>
+                        <span>คำร้องลา / ขอออกนอกสถานศึกษา</span>
+                        <svg class="sidebar-group-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+                            stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m5 7.5 5 5 5-5" />
+                        </svg>
+                    </button>
+                    <div id="request-submenu" class="sidebar-submenu">
+                        <button onclick="switchTab('leave')" id="tab-leave" class="hidden sidebar-nav-item" title="แบบฟอร์มยื่นคำร้องลาป่วย / ลากิจ">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14 3v6h6M8 13h8m-8 4h6" />
+                            </svg>
+                            <span>แบบฟอร์มยื่นคำร้องลาป่วย / ลากิจ</span>
+                        </button>
+                        <button onclick="switchTab('gate-pass')" id="tab-gate-pass" class="hidden sidebar-nav-item" title="แบบฟอร์มยื่นคำขอออกนอกสถานศึกษา / ไปราชการ">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16M2 21h20M9 21v-5h6v5M9 8h.01M15 8h.01M9 12h.01M15 12h.01" />
+                            </svg>
+                            <span>แบบฟอร์มยื่นคำขอออกนอกสถานศึกษา / ไปราชการ</span>
+                        </button>
+                        <button onclick="switchTab('leave-history')" id="tab-leave-history" class="hidden sidebar-nav-item" title="ประวัติคำร้องลาและคำขอออกนอกสถานศึกษาของคุณ">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 2.64-6.36L3 8m0-5v5h5m4-1v5l3 2" />
+                            </svg>
+                            <span>ประวัติคำร้องลาและคำขอออกนอกสถานศึกษาของคุณ</span>
+                        </button>
+                    </div>
+                </div>
+                <button onclick="switchTab('executive-overview')" id="tab-executive-overview" class="hidden sidebar-nav-item" title="พิจารณาอนุมัติคำขอ">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-3Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m9 12 2 2 4-4" />
+                    </svg>
+                    <span>พิจารณาอนุมัติคำขอ</span>
+                </button>
+                <button onclick="switchTab('hr-management')" id="tab-hr-management" class="hidden sidebar-nav-item" title="ตารางกำกับการมาปฏิบัติงาน">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v16H4zM8 2v4m8-4v4M4 9h16M8 13h3m-3 3h6" />
+                    </svg>
+                    <span>ตารางกำกับการมาปฏิบัติงาน</span>
+                </button>
+                <button onclick="switchTab('report')" id="tab-report" class="sidebar-nav-item" title="สรุปสถิติ &amp; รายงานประเมิน">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5m0 14h17M8 15l3-4 3 2 5-7" />
+                    </svg>
+                    <span>สรุปสถิติ &amp; รายงานประเมิน</span>
+                </button>
+            </nav>
+        </aside>
+        <div class="app-main-column">
         <header class="bg-rose-900 text-white shadow-sm border-b border-rose-800">
             <div class="container mx-auto px-6 h-20 flex justify-between items-center">
+                <button id="sidebar-toggle" type="button" class="header-sidebar-toggle" onclick="toggleSidebar()"
+                    aria-label="ย่อแถบเมนู" aria-expanded="true" aria-controls="app-sidebar" title="ย่อแถบเมนู">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
                 <div class="flex items-center gap-3">
                     <div class="flex items-center justify-center">
-                        <img src="images/logo.png" alt="โลโก้โรงเรียนบางแพปฐมพิทยา" class="w-14 h-14 object-contain">
+
                     </div>
                     <div class="header-brand-text">
-                        <h2 class="font-bold text-lg leading-tight">ระบบบริหารและบันทึกเวลาการทำงาน</h2>
-                        <p class="text-xs text-rose-200">โรงเรียนบางแพปฐมพิทยา</p>
+
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -181,21 +260,6 @@
         </header>
 
         <main class="container mx-auto px-6 py-8 flex-grow max-w-6xl">
-            <!-- Navigation Tabs -->
-            <div class="flex flex-wrap gap-2 mb-8 p-1.5 bg-white rounded-2xl shadow-sm border border-slate-200/60 w-fit"
-                id="nav-tabs">
-                <button onclick="switchTab('executive-overview')" id="tab-executive-overview"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">พิจารณาอนุมัติคำขอ</button>
-                <button onclick="switchTab('checkin')" id="tab-checkin"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-rose-900 bg-amber-200/70 shadow-sm transition">ลงเวลาทำงาน</button>
-                <button onclick="switchTab('leave')" id="tab-leave"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">คำร้องลา / ขอออกนอกสถานศึกษา</button>
-                <button onclick="switchTab('hr-management')" id="tab-hr-management"
-                    class="hidden px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">ตารางกำกับการมาปฏิบัติงาน</button>
-                <button onclick="switchTab('report')" id="tab-report"
-                    class="px-5 py-2.5 text-sm font-semibold rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">สรุปสถิติ & รายงานประเมิน</button>
-            </div>
-
             <!-- TAB EXECUTIVE: ผู้บริหารสถานศึกษา -->
             <div id="content-executive-overview" class="hidden space-y-6">
                 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -386,7 +450,7 @@
                 </div>
             </div>
 
-            <!-- TAB STAFF: ยื่นคำร้องลาและคำขอออกนอกสถานศึกษา พร้อมประวัติสถานะ -->
+            <!-- TAB STAFF: แบบฟอร์มยื่นคำร้องลาป่วย / ลากิจ -->
             <div id="content-leave" class="hidden space-y-6">
                 <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
                     <h3 class="text-lg font-bold text-slate-800 mb-1">แบบฟอร์มยื่นคำร้องลาป่วย / ลากิจ</h3>
@@ -422,7 +486,10 @@
                             class="px-6 py-3 bg-rose-900 hover:bg-rose-950 text-white font-semibold rounded-xl text-sm shadow-sm transition">ยื่นคำร้องลา</button>
                     </form>
                 </div>
+            </div>
 
+            <!-- TAB STAFF: แบบฟอร์มยื่นคำขอออกนอกสถานศึกษา / ไปราชการ -->
+            <div id="content-gate-pass" class="hidden space-y-6">
                 <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">แบบฟอร์มยื่นคำขอออกนอกสถานศึกษา / ไปราชการ</h3>
                     <form onsubmit="submitLeave(event)" class="space-y-4">
@@ -492,24 +559,26 @@
                         <button type="submit"
                             class="px-6 py-3 bg-rose-900 hover:bg-rose-950 text-white font-semibold rounded-xl text-sm shadow-sm transition">ยื่นคำขออนุมัติ</button>
                     </form>
+                </div>
+            </div>
 
-                    <!-- ตารางแสดงประวัติและสถานะการอนุมัติแบบ Real-time ของ Staff -->
-                    <div class="mt-8 pt-6 border-t border-slate-100">
-                        <h4 class="text-base font-bold text-slate-800 mb-4">ประวัติคำร้องลาและคำขอออกนอกสถานศึกษาของคุณ</h4>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr
-                                        class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                        <th class="py-3 px-4">วันที่ - เวลาที่ขอ</th>
-                                        <th class="py-3 px-4">เหตุผล</th>
-                                        <th class="py-3 px-4">ผู้สอนแทน</th>
-                                        <th class="py-3 px-4">สถานะการอนุมัติ</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="staff-leave-history" class="text-sm divide-y divide-slate-50"></tbody>
-                            </table>
-                        </div>
+            <!-- TAB STAFF: ประวัติคำร้องลาและคำขอออกนอกสถานศึกษา -->
+            <div id="content-leave-history" class="hidden space-y-6">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">ประวัติคำร้องลาและคำขอออกนอกสถานศึกษาของคุณ</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr
+                                    class="border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <th class="py-3 px-4">วันที่ - เวลาที่ขอ</th>
+                                    <th class="py-3 px-4">เหตุผล</th>
+                                    <th class="py-3 px-4">ผู้สอนแทน</th>
+                                    <th class="py-3 px-4">สถานะการอนุมัติ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staff-leave-history" class="text-sm divide-y divide-slate-50"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -599,6 +668,7 @@
                 </div>
             </div>
         </main>
+        </div>
     </div>
 
     <script src="app.js"></script>
