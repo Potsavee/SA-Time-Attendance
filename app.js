@@ -953,8 +953,9 @@ async function loadExecutiveRequests() {
             .map(({ row }) => row);
 
         const otherRequests = newestFirst.filter(row =>
-            !['รออนุมัติ', 'อนุมัติ', 'ไม่อนุมัติ'].includes(row.status)
+            !['รออนุมัติ', 'อนุมัติ', 'ไม่อนุมัติ', 'ยกเลิกแล้ว'].includes(row.status)
         );
+        const cancelledRequests = newestFirst.filter(row => row.status === 'ยกเลิกแล้ว');
 
         const renderRequestRow = row => {
             const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อผู้ใช้';
@@ -971,6 +972,7 @@ async function loadExecutiveRequests() {
             let statusBadge = 'bg-amber-50 text-amber-700';
             if(row.status === 'อนุมัติ') statusBadge = 'bg-emerald-50 text-emerald-700';
             if(row.status === 'ไม่อนุมัติ') statusBadge = 'bg-rose-50 text-rose-700';
+            if(row.status === 'ยกเลิกแล้ว') statusBadge = 'bg-slate-100 text-slate-600';
 
             let actionBtns = `-`;
             if (row.status === 'รออนุมัติ') {
@@ -1010,6 +1012,9 @@ async function loadExecutiveRequests() {
             renderRequestSection('คำขอใหม่ รอพิจารณา', pendingRequests, 'ไม่มีคำขอที่รอพิจารณา', 'bg-amber-50 text-amber-800'),
             renderRequestSection('คำขอที่อนุมัติแล้ว', approvedRequests, 'ยังไม่มีคำขอที่อนุมัติแล้ว', 'bg-emerald-50 text-emerald-800'),
             renderRequestSection('คำขอที่ไม่อนุมัติ', rejectedRequests, 'ไม่มีคำขอที่ไม่อนุมัติ', 'bg-rose-50 text-rose-800'),
+            ...(cancelledRequests.length ? [
+                renderRequestSection('คำขอที่ผู้ยื่นยกเลิก', cancelledRequests, '', 'bg-slate-100 text-slate-700')
+            ] : []),
             ...(otherRequests.length ? [
                 renderRequestSection('สถานะอื่น', otherRequests, '', 'bg-slate-100 text-slate-700')
             ] : []),
@@ -1042,6 +1047,30 @@ async function updateLeaveStatus(id, newStatus, requestKind = 'off_campus') {
         showNotification(`อัปเดตสถานะเป็น "${newStatus}" เรียบร้อยแล้ว ระบบได้ส่งการแจ้งเตือน Real-time ให้บุคลากรทราบ`);
         loadExecutiveRequests();
     }
+}
+
+async function cancelStaffRequest(id, requestKind) {
+    if (!currentUser || !['staff', 'hr'].includes(currentUser.role)) return;
+    if (!window.confirm('ยืนยันยกเลิกคำขอนี้?')) return;
+
+    const table = requestKind === 'leave_application' ? 'leave_applications' : 'gate_passes';
+    const { data, error } = await supabaseClient
+        .from(table)
+        .update({ status: 'ยกเลิกแล้ว' })
+        .eq('id', id)
+        .eq('staff_id', currentUser.staff_id)
+        .eq('status', 'รออนุมัติ')
+        .select('id');
+
+    if (error || !data?.length) {
+        if (error) console.error('Error cancelling staff request:', error);
+        showNotification('ยกเลิกคำขอไม่สำเร็จ คำขออาจถูกดำเนินการไปแล้ว', 'error');
+        loadStaffLeaveHistory();
+        return;
+    }
+
+    showNotification('ยกเลิกคำขอเรียบร้อยแล้ว');
+    loadStaffLeaveHistory();
 }
 
 // 2. HR ตรวจสอบการมาปฏิบัติงาน
@@ -1880,6 +1909,9 @@ async function loadStaffLeaveHistory() {
             } else if (row.status === 'ไม่อนุมัติ') {
                 statusBadge = 'bg-rose-50 text-rose-700 border border-rose-200';
                 statusText = '🔴 ไม่อนุมัติ';
+            } else if (row.status === 'ยกเลิกแล้ว') {
+                statusBadge = 'bg-slate-100 text-slate-600 border border-slate-200';
+                statusText = 'ยกเลิกแล้ว';
             }
 
             const isLeaveApplication = row.request_kind === 'leave_application';
@@ -1890,13 +1922,16 @@ async function loadStaffLeaveHistory() {
                 ? `${row.leave_date}${row.leave_end_date !== row.leave_date ? ` ถึง ${row.leave_end_date}` : ''}<br><span class="text-xs text-slate-400">ลาเต็มวัน</span>`
                 : `${row.leave_date}<br><span class="text-xs text-slate-400">${row.time_range}</span>`;
             const subText = row.substitute_teacher ? `${row.substitute_teacher} (${row.subject || '-'})` : '-';
+            const cancelButton = row.status === 'รออนุมัติ'
+                ? `<button type="button" onclick="cancelStaffRequest('${row.id}', '${row.request_kind}')" class="mt-2 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">ยกเลิกคำขอ</button>`
+                : '';
 
             return `
                 <tr class="hover:bg-slate-50/50 transition">
                     <td class="py-4 px-4 font-medium text-slate-700"><span class="text-xs text-slate-500">${requestLabel}</span><br>${dateText}</td>
                     <td class="py-4 px-4 text-slate-600">${row.reason}</td>
                     <td class="py-4 px-4 text-slate-600">${subText}</td>
-                    <td class="py-4 px-4"><span class="px-3 py-1 ${statusBadge} rounded-full text-xs font-semibold">${statusText}</span></td>
+                    <td class="py-4 px-4"><span class="px-3 py-1 ${statusBadge} rounded-full text-xs font-semibold">${statusText}</span>${cancelButton ? `<div>${cancelButton}</div>` : ''}</td>
                 </tr>
             `;
         }).join('');
