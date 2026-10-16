@@ -436,6 +436,23 @@
 
                 <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60">
                     <h3 class="text-base font-bold text-slate-800 mb-4">ประวัติการมาปฏิบัติงานของคุณ</h3>
+                    <div class="flex flex-col gap-4 pb-4 mb-1 border-b border-slate-100 sm:flex-row sm:items-end sm:justify-between">
+                        <label for="attendance-history-month" class="block text-xs font-semibold text-slate-600">
+                            เลือกเดือน
+                            <input id="attendance-history-month" type="month" onchange="renderAttendanceHistory()"
+                                class="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 focus:border-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-100">
+                        </label>
+                        <div class="grid grid-cols-2 gap-8 sm:min-w-72">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500">มาทำงาน</p>
+                                <p id="monthly-attended-days" class="mt-1 text-2xl font-bold leading-none text-emerald-700">0 <span class="text-sm font-medium">วัน</span></p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500">มาสาย</p>
+                                <p id="monthly-late-days" class="mt-1 text-2xl font-bold leading-none text-amber-700">0 <span class="text-sm font-medium">วัน</span></p>
+                            </div>
+                        </div>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>

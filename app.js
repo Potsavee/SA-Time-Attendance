@@ -22,6 +22,7 @@ let notificationStorageWarningShown = false;
 let bellNotificationStorageKey = null;
 let notificationSyncPromise = null;
 let hrAttendancePeriod = 'daily';
+let attendanceHistoryRows = [];
 
 function deduplicateSidebarMenu() {
     const nav = document.getElementById('nav-tabs');
@@ -1643,23 +1644,46 @@ async function loadAttendanceHistory() {
         .eq('staff_id', currentUser.staff_id)
         .order('check_in', { ascending: false });
 
+    attendanceHistoryRows = data || [];
+    const onTimeCount = attendanceHistoryRows.filter(row => row.status === 'มาตรงเวลา').length;
+    const lateCount = attendanceHistoryRows.filter(row => row.status === 'มาสาย').length;
+
+    document.getElementById('stat-ontime').innerHTML = `${onTimeCount} <span class="text-sm font-normal text-emerald-600">ครั้ง</span>`;
+    document.getElementById('stat-late').innerHTML = `${lateCount} <span class="text-sm font-normal text-amber-600">ครั้ง</span>`;
+
+    const monthInput = document.getElementById('attendance-history-month');
+    if (!monthInput.value) {
+        monthInput.value = getSchoolDayBounds(new Date()).dateKey.slice(0, 7);
+    }
+
+    renderAttendanceHistory();
+}
+
+function renderAttendanceHistory() {
+    const monthInput = document.getElementById('attendance-history-month');
     const tbody = document.getElementById('attendance-history');
+    if (!monthInput || !tbody) return;
+
+    const selectedMonth = monthInput.value;
+    const monthRows = attendanceHistoryRows.filter(row => row.check_in
+        && getSchoolDayBounds(new Date(row.check_in)).dateKey.slice(0, 7) === selectedMonth);
+    const attendedDays = new Set(monthRows.map(row => getSchoolDayBounds(new Date(row.check_in)).dateKey));
+    const lateDays = new Set(monthRows
+        .filter(row => row.status === 'มาสาย')
+        .map(row => getSchoolDayBounds(new Date(row.check_in)).dateKey));
+
+    document.getElementById('monthly-attended-days').innerHTML = `${attendedDays.size} <span class="text-sm font-medium">วัน</span>`;
+    document.getElementById('monthly-late-days').innerHTML = `${lateDays.size} <span class="text-sm font-medium">วัน</span>`;
     tbody.innerHTML = '';
 
-    let onTimeCount = 0;
-    let lateCount = 0;
-
-    if (data && data.length > 0) {
-        data.forEach(row => {
-            if(row.status === 'มาตรงเวลา') onTimeCount++;
-            else lateCount++;
-
-            const checkInDate = row.check_in ? new Date(row.check_in).toLocaleDateString('th-TH', {
+    if (monthRows.length > 0) {
+        monthRows.forEach(row => {
+            const checkInDate = new Date(row.check_in).toLocaleDateString('th-TH', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric'
-            }) : '-';
-            const checkInTime = row.check_in ? new Date(row.check_in).toLocaleTimeString('th-TH') : '-';
+            });
+            const checkInTime = new Date(row.check_in).toLocaleTimeString('th-TH');
             const checkOutTime = row.check_out ? new Date(row.check_out).toLocaleTimeString('th-TH') : '-';
             const badgeClass = row.status === 'มาตรงเวลา' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700';
 
@@ -1673,11 +1697,8 @@ async function loadAttendanceHistory() {
             `;
         });
     } else {
-        tbody.innerHTML = `<tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ยังไม่มีประวัติการปฏิบัติงาน</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">ไม่มีประวัติการปฏิบัติงานในเดือนนี้</td></tr>`;
     }
-
-    document.getElementById('stat-ontime').innerHTML = `${onTimeCount} <span class="text-sm font-normal text-emerald-600">ครั้ง</span>`;
-    document.getElementById('stat-late').innerHTML = `${lateCount} <span class="text-sm font-normal text-amber-600">ครั้ง</span>`;
 }
 
 function formatLeaveTimeRange(startTime, endTime) {
