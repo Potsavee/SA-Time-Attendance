@@ -1700,6 +1700,7 @@ async function loadAttendanceHistory() {
         .order('check_in', { ascending: false });
 
     attendanceHistoryRows = data || [];
+    renderTodayAttendanceStatus(error);
     const onTimeCount = attendanceHistoryRows.filter(row => row.status === 'มาตรงเวลา').length;
     const lateCount = attendanceHistoryRows.filter(row => row.status === 'มาสาย').length;
 
@@ -1712,6 +1713,36 @@ async function loadAttendanceHistory() {
     }
 
     renderAttendanceHistory();
+}
+
+function renderTodayAttendanceStatus(error) {
+    const status = document.getElementById('today-attendance-status');
+    if (!status) return;
+
+    if (error) {
+        status.textContent = 'ตรวจสอบสถานะวันนี้ไม่สำเร็จ';
+        status.className = 'mt-3 inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-sm font-semibold text-rose-700';
+        return;
+    }
+
+    const todayKey = getSchoolDayBounds(new Date()).dateKey;
+    const todayRecord = attendanceHistoryRows.find(row => row.check_in
+        && getSchoolDayBounds(new Date(row.check_in)).dateKey === todayKey);
+
+    if (!todayRecord) {
+        status.textContent = 'ยังไม่ได้เข้างานวันนี้';
+        status.className = 'mt-3 inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800';
+        return;
+    }
+
+    const checkInTime = new Date(todayRecord.check_in).toLocaleTimeString('th-TH', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    status.textContent = todayRecord.check_out
+        ? `เข้างานแล้ว ${checkInTime} น. · ลงเวลาออกแล้ว`
+        : `เข้างานแล้ว ${checkInTime} น.`;
+    status.className = 'mt-3 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700';
 }
 
 function renderAttendanceHistory() {
