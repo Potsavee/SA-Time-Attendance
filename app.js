@@ -1077,14 +1077,17 @@ async function cancelStaffRequest(id, requestKind) {
 async function loadHrAttendanceLogs() {
     const { data: staffData, error: staffError } = await supabaseClient
         .from('staff')
-        .select('staff_id, name');
+        .select('staff_id, name, department');
 
     const staffMap = {};
+    const staffDepartmentMap = {};
     if (staffData) {
         staffData.forEach(staff => {
             staffMap[staff.staff_id] = staff.name;
+            staffDepartmentMap[staff.staff_id] = staff.department || '';
         });
     }
+    updateHrDepartmentFilter(staffData || []);
 
     const { data, error } = await supabaseClient
         .from('attendance_logs')
@@ -1098,6 +1101,7 @@ async function loadHrAttendanceLogs() {
     if (data && data.length > 0) {
         data.forEach(row => {
             const staffName = staffMap[row.staff_id] || 'ไม่พบชื่อ';
+            const staffDepartment = staffDepartmentMap[row.staff_id] || '';
             const checkInDateKey = row.check_in ? getLocalDateKey(new Date(row.check_in)) : '';
             const checkInTime = row.check_in ? new Date(row.check_in).toLocaleString('th-TH') : '-';
             const checkOutTime = row.check_out ? new Date(row.check_out).toLocaleString('th-TH') : '-';
@@ -1105,7 +1109,7 @@ async function loadHrAttendanceLogs() {
             const statusText = row.status === 'มาตรงเวลา' ? 'ตรงเวลา' : 'มาสาย';
 
             tbody.innerHTML += `
-                <tr data-check-in-date="${checkInDateKey}" class="hover:bg-slate-50/50 transition align-top">
+                <tr data-check-in-date="${checkInDateKey}" data-department="${encodeURIComponent(staffDepartment)}" class="hover:bg-slate-50/50 transition align-top">
                     <td class="py-3 px-4">
                         <div class="font-semibold text-slate-800">${staffName}</div>
                         <div class="text-[11px] text-slate-400">${row.staff_id}</div>
@@ -1127,6 +1131,25 @@ async function loadHrAttendanceLogs() {
     updateHrAttendancePeriodControls();
     filterHrTable();
     loadHrDailySummary();
+}
+
+function updateHrDepartmentFilter(staffData) {
+    const departmentFilter = document.getElementById('hr-department-filter');
+    if (!departmentFilter) return;
+
+    const selectedDepartment = departmentFilter.value;
+    const departments = [...new Set(staffData
+        .map(staff => staff.department?.trim())
+        .filter(Boolean))]
+        .sort((first, second) => first.localeCompare(second, 'th'));
+
+    departmentFilter.replaceChildren(new Option('ทุกกลุ่มสาระ', ''));
+    departments.forEach(department => {
+        departmentFilter.add(new Option(department, encodeURIComponent(department)));
+    });
+    departmentFilter.value = departments.some(department => encodeURIComponent(department) === selectedDepartment)
+        ? selectedDepartment
+        : '';
 }
 
 async function loadHrDailySummary() {
@@ -1310,12 +1333,14 @@ function getSixMonthRangeStart(endDate) {
 
 function filterHrTable() {
     const searchInput = document.getElementById('hr-search-input');
+    const departmentFilter = document.getElementById('hr-department-filter');
     const dateInput = document.getElementById('hr-period-date');
     const tbody = document.getElementById('hr-attendance-list');
     if (!searchInput || !dateInput || !tbody) return;
 
     updateHrAttendancePeriodControls();
     const input = searchInput.value.toLowerCase();
+    const selectedDepartment = departmentFilter?.value || '';
     const selectedDate = getSelectedHrPeriodDate(dateInput.value);
     const selectedDateKey = selectedDate ? getLocalDateKey(selectedDate) : '';
     const selectedMonthKey = selectedDateKey.slice(0, 7);
@@ -1331,8 +1356,9 @@ function filterHrTable() {
                 ? dateKey.slice(0, 7) === selectedMonthKey
                 : dateKey >= rangeStartKey && dateKey <= selectedDateKey);
         const matchesSearch = row.innerText.toLowerCase().includes(input);
-        row.style.display = matchesPeriod && matchesSearch ? '' : 'none';
-        if (matchesPeriod && matchesSearch) visibleCount++;
+        const matchesDepartment = !selectedDepartment || row.dataset.department === selectedDepartment;
+        row.style.display = matchesPeriod && matchesSearch && matchesDepartment ? '' : 'none';
+        if (matchesPeriod && matchesSearch && matchesDepartment) visibleCount++;
     });
 
     let emptyRow = document.getElementById('hr-attendance-filter-empty');
@@ -1340,7 +1366,7 @@ function filterHrTable() {
         if (!emptyRow) {
             emptyRow = document.createElement('tr');
             emptyRow.id = 'hr-attendance-filter-empty';
-            emptyRow.innerHTML = '<td colspan="4" class="py-4 px-4 text-center text-slate-400">ไม่พบข้อมูลในช่วงเวลาที่เลือก</td>';
+            emptyRow.innerHTML = '<td colspan="4" class="py-4 px-4 text-center text-slate-400">ไม่พบข้อมูลตามตัวกรองที่เลือก</td>';
             tbody.append(emptyRow);
         }
     } else {
