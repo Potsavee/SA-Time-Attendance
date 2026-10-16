@@ -23,6 +23,8 @@ let bellNotificationStorageKey = null;
 let notificationSyncPromise = null;
 let hrAttendancePeriod = 'daily';
 let attendanceHistoryRows = [];
+let reportPeriod = 'six-months';
+let reportData = null;
 
 function deduplicateSidebarMenu() {
     const nav = document.getElementById('nav-tabs');
@@ -602,10 +604,9 @@ async function handleLogin(event) {
             tabGatePass.classList.add('hidden');
             tabLeaveHistory.classList.add('hidden');
             requestMenuGroup.classList.add('hidden');
-            if (tabReportBtn) tabReportBtn.classList.remove('hidden');
+            if (tabReportBtn) tabReportBtn.classList.add('hidden');
             switchTab('executive-overview');
             loadExecutiveRequests();
-            loadExecutiveReport();
         } else if (currentUser.role === 'hr') {
             roleText = 'ฝ่ายบริหารงานบุคคล / ธุรการ';
             tabExec.classList.add('hidden');
@@ -615,9 +616,10 @@ async function handleLogin(event) {
             tabGatePass.classList.remove('hidden');
             tabLeaveHistory.classList.remove('hidden');
             requestMenuGroup.classList.remove('hidden');
-            if (tabReportBtn) tabReportBtn.classList.add('hidden');
+            if (tabReportBtn) tabReportBtn.classList.remove('hidden');
             switchTab('checkin');
             loadHrAttendanceLogs();
+            loadExecutiveReport();
             loadAttendanceHistory();
             loadStaffLeaveHistory();
         } else {
@@ -702,7 +704,7 @@ function subscribeToRealtimeUpdates() {
             if (currentUser.role === 'staff' || currentUser.role === 'hr') {
                 loadAttendanceHistory();
             }
-            if (currentUser.role === 'executive') {
+            if (currentUser.role === 'hr') {
                 loadExecutiveReport();
             }
         })
@@ -786,10 +788,11 @@ function refreshLeaveRequestViews(subscribedStaffId) {
 
     if (currentUser.role === 'executive') {
         loadExecutiveRequests();
-        loadExecutiveReport();
     } else {
         loadStaffLeaveHistory();
-        if (currentUser.role === 'hr') loadHrDailySummary();
+        if (currentUser.role === 'hr') {
+            loadExecutiveReport();
+        }
     }
 }
 
@@ -808,6 +811,8 @@ function stopRealtimeSubscriptions() {
 }
 
 function switchTab(tabName) {
+    if (tabName === 'report' && currentUser?.role !== 'hr') return;
+
     const tabs = ['executive-overview', 'hr-management', 'checkin', 'leave', 'gate-pass', 'leave-history', 'report'];
     
     tabs.forEach(t => {
@@ -1109,7 +1114,7 @@ async function loadHrAttendanceLogs() {
             const statusText = row.status === 'มาตรงเวลา' ? 'ตรงเวลา' : 'มาสาย';
 
             tbody.innerHTML += `
-                <tr data-check-in-date="${checkInDateKey}" data-department="${encodeURIComponent(staffDepartment)}" class="hover:bg-slate-50/50 transition align-top">
+                <tr data-check-in-date="${checkInDateKey}" data-department="${encodeURIComponent(staffDepartment)}" data-attendance-status="${encodeURIComponent(row.status || '')}" class="hover:bg-slate-50/50 transition align-top">
                     <td class="py-3 px-4">
                         <div class="font-semibold text-slate-800">${staffName}</div>
                         <div class="text-[11px] text-slate-400">${row.staff_id}</div>
@@ -1130,7 +1135,6 @@ async function loadHrAttendanceLogs() {
 
     updateHrAttendancePeriodControls();
     filterHrTable();
-    loadHrDailySummary();
 }
 
 function updateHrDepartmentFilter(staffData) {
@@ -1150,48 +1154,6 @@ function updateHrDepartmentFilter(staffData) {
     departmentFilter.value = departments.some(department => encodeURIComponent(department) === selectedDepartment)
         ? selectedDepartment
         : '';
-}
-
-async function loadHrDailySummary() {
-    const totalCard = document.getElementById('hr-summary-total');
-    const presentCard = document.getElementById('hr-summary-present');
-    const lateCard = document.getElementById('hr-summary-late');
-    if (!totalCard || !presentCard || !lateCard) return;
-
-    try {
-        const { start, end } = getSchoolDayBounds(new Date());
-        const [
-            { data: attendanceRows, error: attendanceError },
-            { count: staffCount, error: staffError }
-        ] = await Promise.all([
-            supabaseClient.from('attendance_logs')
-                .select('staff_id, status')
-                .gte('check_in', start.toISOString())
-                .lt('check_in', end.toISOString()),
-            supabaseClient.from('staff').select('staff_id', { count: 'exact', head: true })
-        ]);
-
-        if (attendanceError || staffError) {
-            console.error('Could not load HR daily summary:', {
-                attendanceError,
-                staffError
-            });
-            throw new Error('Daily attendance summary query failed');
-        }
-
-        const attendedStaff = new Set((attendanceRows || []).map(row => row.staff_id));
-        const lateStaff = new Set((attendanceRows || [])
-            .filter(row => row.status === 'มาสาย')
-            .map(row => row.staff_id));
-
-        totalCard.innerHTML = `${staffCount ?? 0} <span class="text-xs font-normal">คน</span>`;
-        presentCard.innerHTML = `${attendedStaff.size} <span class="text-xs font-normal">คน</span>`;
-        lateCard.innerHTML = `${lateStaff.size} <span class="text-xs font-normal">คน</span>`;
-    } catch (error) {
-        console.error('Could not load HR daily summary:', error);
-        [totalCard, presentCard, lateCard].forEach(card => { card.textContent = 'โหลดไม่สำเร็จ'; });
-        showNotification('โหลดสรุปการปฏิบัติงานวันนี้ไม่สำเร็จ', 'error');
-    }
 }
 
 function setHrAttendancePeriod(period) {
@@ -1334,6 +1296,7 @@ function getSixMonthRangeStart(endDate) {
 function filterHrTable() {
     const searchInput = document.getElementById('hr-search-input');
     const departmentFilter = document.getElementById('hr-department-filter');
+    const statusFilter = document.getElementById('hr-status-filter');
     const dateInput = document.getElementById('hr-period-date');
     const tbody = document.getElementById('hr-attendance-list');
     if (!searchInput || !dateInput || !tbody) return;
@@ -1341,6 +1304,7 @@ function filterHrTable() {
     updateHrAttendancePeriodControls();
     const input = searchInput.value.toLowerCase();
     const selectedDepartment = departmentFilter?.value || '';
+    const selectedStatus = statusFilter?.value || '';
     const selectedDate = getSelectedHrPeriodDate(dateInput.value);
     const selectedDateKey = selectedDate ? getLocalDateKey(selectedDate) : '';
     const selectedMonthKey = selectedDateKey.slice(0, 7);
@@ -1357,8 +1321,9 @@ function filterHrTable() {
                 : dateKey >= rangeStartKey && dateKey <= selectedDateKey);
         const matchesSearch = row.innerText.toLowerCase().includes(input);
         const matchesDepartment = !selectedDepartment || row.dataset.department === selectedDepartment;
-        row.style.display = matchesPeriod && matchesSearch && matchesDepartment ? '' : 'none';
-        if (matchesPeriod && matchesSearch && matchesDepartment) visibleCount++;
+        const matchesStatus = !selectedStatus || decodeURIComponent(row.dataset.attendanceStatus || '') === selectedStatus;
+        row.style.display = matchesPeriod && matchesSearch && matchesDepartment && matchesStatus ? '' : 'none';
+        if (matchesPeriod && matchesSearch && matchesDepartment && matchesStatus) visibleCount++;
     });
 
     let emptyRow = document.getElementById('hr-attendance-filter-empty');
@@ -1999,30 +1964,98 @@ async function loadStaffLeaveHistory() {
     }
 }
 
-// โหลดข้อมูลสถิติรายบุคคลสำหรับหน้าสรุปผลประเมิน 6 เดือน
+function getReportDateRange() {
+    const monthInput = document.getElementById('report-period-month');
+    const match = /^(\d{4})-(\d{2})$/.exec(monthInput?.value || '');
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    const selectedMonthIndex = Number(match[2]) - 1;
+    const startMonthIndex = selectedMonthIndex - (reportPeriod === 'six-months' ? 5 : 0);
+    const getMonthDateKey = monthIndex => {
+        const date = new Date(Date.UTC(year, monthIndex, 1));
+        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    };
+    const startDateKey = getMonthDateKey(startMonthIndex);
+    const endDateKey = getMonthDateKey(selectedMonthIndex + 1);
+    const toBangkokMonthStart = monthIndex => new Date(Date.UTC(year, monthIndex, 1) - 7 * 60 * 60 * 1000);
+
+    return {
+        start: toBangkokMonthStart(startMonthIndex),
+        end: toBangkokMonthStart(selectedMonthIndex + 1),
+        startDateKey,
+        endDateKey,
+        startMonth: new Date(`${startDateKey}T12:00:00Z`),
+        endMonth: new Date(`${getMonthDateKey(selectedMonthIndex)}T12:00:00Z`)
+    };
+}
+
+function updateReportPeriodControls() {
+    const monthInput = document.getElementById('report-period-month');
+    if (!monthInput) return;
+    if (!monthInput.value) {
+        monthInput.value = getSchoolDayBounds(new Date()).dateKey.slice(0, 7);
+    }
+
+    const monthlyButton = document.getElementById('report-period-monthly');
+    const sixMonthsButton = document.getElementById('report-period-six-months');
+    [monthlyButton, sixMonthsButton].forEach(button => {
+        if (!button) return;
+        const isActive = button.id === `report-period-${reportPeriod}`;
+        button.className = isActive
+            ? 'rounded-xl bg-rose-900 px-4 py-2 text-xs font-semibold text-white'
+            : 'rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200';
+        button.setAttribute('aria-pressed', String(isActive));
+    });
+
+    const label = document.getElementById('report-period-month-label');
+    if (label) label.textContent = reportPeriod === 'monthly' ? 'เลือกเดือน' : 'เดือนสิ้นสุด';
+
+    const description = document.getElementById('report-period-description');
+    const range = getReportDateRange();
+    if (!description || !range) return;
+    const formatMonth = date => date.toLocaleDateString('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        month: 'long',
+        year: 'numeric'
+    });
+    description.textContent = reportPeriod === 'monthly'
+        ? `แสดงข้อมูลเดือน ${formatMonth(range.endMonth)}`
+        : `แสดงข้อมูลตั้งแต่ ${formatMonth(range.startMonth)} ถึง ${formatMonth(range.endMonth)}`;
+}
+
+function setReportPeriod(period) {
+    if (!['monthly', 'six-months'].includes(period)) return;
+    reportPeriod = period;
+    updateReportPeriodControls();
+    renderExecutiveReport();
+}
+
+function isReportLeaveInRange(leave, range) {
+    const startDate = String(leave.start_date || leave.leave_date || '').slice(0, 10);
+    const endDate = String(leave.end_date || leave.leave_end_date || startDate).slice(0, 10);
+    return Boolean(startDate && endDate && startDate < range.endDateKey && endDate >= range.startDateKey);
+}
+
 async function loadExecutiveReport() {
+    if (currentUser?.role !== 'hr') return;
+    updateReportPeriodControls();
+
     try {
-        // 1. ดึงข้อมูลบุคลากรทั้งหมด
-        const { data: staffList, error: staffError } = await supabaseClient
-            .from('staff')
-            .select('staff_id, name, department, role');
-
-        // 2. ดึงข้อมูลประวัติการสแกนเวลาทั้งหมด
-        const { data: logsList, error: logsError } = await supabaseClient
-            .from('attendance_logs')
-            .select('*');
-
-        // 3. ดึงข้อมูลคำขอลาทั้งหมด
-        const { data: leaveList, error: leaveError } = await supabaseClient
-            .from('gate_passes')
-            .select('*');
-
-        const { data: leaveApplications, error: leaveApplicationError } = await supabaseClient
-            .from('leave_applications')
-            .select('staff_id');
+        const [
+            { data: staffList, error: staffError },
+            { data: logsList, error: logsError },
+            { data: leaveList, error: leaveError },
+            { data: leaveApplications, error: leaveApplicationError }
+        ] = await Promise.all([
+            supabaseClient.from('staff').select('staff_id, name, department, role'),
+            supabaseClient.from('attendance_logs').select('staff_id, status, check_in'),
+            supabaseClient.from('gate_passes').select('staff_id, leave_date'),
+            supabaseClient.from('leave_applications').select('staff_id, start_date, end_date')
+        ]);
 
         if (staffError || logsError || leaveError || leaveApplicationError) {
-            console.error('Error loading executive report data:', {
+            console.error('Error loading HR report data:', {
                 staffError,
                 logsError,
                 leaveError,
@@ -2032,63 +2065,76 @@ async function loadExecutiveReport() {
             return;
         }
 
-        const tbody = document.getElementById('individual-report-list');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-
-        let totalOnTime = 0;
-        let totalLate = 0;
-        let totalLeave = (leaveList?.length || 0) + (leaveApplications?.length || 0);
-        let reportStaffCount = 0;
-
-        if (staffList && staffList.length > 0) {
-            staffList.forEach(person => {
-                // กรองสถิติของแต่ละคน
-                const personLogs = logsList ? logsList.filter(l => l.staff_id === person.staff_id) : [];
-                const personLeaves = [
-                    ...(leaveList || []).filter(lv => lv.staff_id === person.staff_id),
-                    ...(leaveApplications || []).filter(lv => lv.staff_id === person.staff_id)
-                ];
-
-                let onTimeCount = personLogs.filter(l => l.status === 'มาตรงเวลา').length;
-                let lateCount = personLogs.filter(l => l.status === 'มาสาย').length;
-
-                totalOnTime += onTimeCount;
-                totalLate += lateCount;
-
-                if (person.role === 'executive') return;
-                reportStaffCount++;
-
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-50/50 transition">
-                        <td class="py-4 px-4">
-                            <span class="font-bold text-slate-800">${person.name}</span><br>
-                            <span class="text-xs text-slate-400">ID: ${person.staff_id}</span>
-                        </td>
-                        <td class="py-4 px-4 text-slate-600">${person.department || '-'}</td>
-                        <td class="py-4 px-4 text-center font-semibold text-emerald-700">${onTimeCount}</td>
-                        <td class="py-4 px-4 text-center font-semibold text-amber-600">${lateCount}</td>
-                        <td class="py-4 px-4 text-center font-semibold text-rose-700">${personLeaves.length}</td>
-                    </tr>
-                `;
-            });
-        } else {
-            tbody.innerHTML = `<tr><td colspan="5" class="py-4 px-4 text-center text-slate-400">ไม่พบข้อมูลบุคลากรในระบบ</td></tr>`;
-        }
-
-        if (reportStaffCount === 0 && staffList?.length) {
-            tbody.innerHTML = `<tr><td colspan="5" class="py-4 px-4 text-center text-slate-400">ไม่มีข้อมูลบุคลากรที่ไม่ใช่ผู้บริหาร</td></tr>`;
-        }
-
-        // อัปเดตตัวเลขรวมการ์ดด้านบน
-        document.getElementById('stat-ontime').innerHTML = `${totalOnTime} <span class="text-sm font-normal text-emerald-600">ครั้ง</span>`;
-        document.getElementById('stat-late').innerHTML = `${totalLate} <span class="text-sm font-normal text-amber-600">ครั้ง</span>`;
-        document.getElementById('stat-leave').innerHTML = `${totalLeave} <span class="text-sm font-normal text-rose-600">รายการ</span>`;
-        renderExecutiveReportChart(totalOnTime, totalLate, totalLeave);
-
+        reportData = {
+            staffList: staffList || [],
+            logsList: logsList || [],
+            leaveList: leaveList || [],
+            leaveApplications: leaveApplications || []
+        };
+        renderExecutiveReport();
     } catch (err) {
-        console.error('Error loading executive report:', err);
+        console.error('Error loading HR report:', err);
     }
+}
+
+function renderExecutiveReport() {
+    if (!reportData) return;
+    updateReportPeriodControls();
+    const range = getReportDateRange();
+    const tbody = document.getElementById('individual-report-list');
+    if (!range || !tbody) return;
+
+    const logsList = reportData.logsList.filter(log => {
+        const checkInTime = Date.parse(log.check_in);
+        return Number.isFinite(checkInTime) && checkInTime >= range.start.getTime() && checkInTime < range.end.getTime();
+    });
+    const leaveList = reportData.leaveList.filter(leave => isReportLeaveInRange(leave, range));
+    const leaveApplications = reportData.leaveApplications.filter(leave => isReportLeaveInRange(leave, range));
+    let totalOnTime = 0;
+    let totalLate = 0;
+    let reportStaffCount = 0;
+    const reportRows = [];
+
+    reportData.staffList.forEach(person => {
+        const personLogs = logsList.filter(log => log.staff_id === person.staff_id);
+        const personLeaves = [
+            ...leaveList.filter(leave => leave.staff_id === person.staff_id),
+            ...leaveApplications.filter(leave => leave.staff_id === person.staff_id)
+        ];
+        const onTimeCount = personLogs.filter(log => log.status === 'มาตรงเวลา').length;
+        const lateCount = personLogs.filter(log => log.status === 'มาสาย').length;
+
+        totalOnTime += onTimeCount;
+        totalLate += lateCount;
+        if (person.role === 'executive') return;
+        reportStaffCount++;
+
+        reportRows.push(`
+            <tr class="hover:bg-slate-50/50 transition">
+                <td class="py-4 px-4">
+                    <span class="font-bold text-slate-800">${person.name}</span><br>
+                    <span class="text-xs text-slate-400">ID: ${person.staff_id}</span>
+                </td>
+                <td class="py-4 px-4 text-slate-600">${person.department || '-'}</td>
+                <td class="py-4 px-4 text-center font-semibold text-emerald-700">${onTimeCount}</td>
+                <td class="py-4 px-4 text-center font-semibold text-amber-600">${lateCount}</td>
+                <td class="py-4 px-4 text-center font-semibold text-rose-700">${personLeaves.length}</td>
+            </tr>
+        `);
+    });
+
+    tbody.innerHTML = reportRows.length
+        ? reportRows.join('')
+        : `<tr><td colspan="5" class="py-4 px-4 text-center text-slate-400">${reportStaffCount === 0 && reportData.staffList.length
+            ? 'ไม่มีข้อมูลบุคลากรที่ไม่ใช่ผู้บริหาร'
+            : 'ไม่พบข้อมูลบุคลากรในระบบ'}</td></tr>`;
+
+    const totalLeave = leaveList.length + leaveApplications.length;
+    document.getElementById('stat-ontime').innerHTML = `${totalOnTime} <span class="text-sm font-normal text-emerald-600">ครั้ง</span>`;
+    document.getElementById('stat-late').innerHTML = `${totalLate} <span class="text-sm font-normal text-amber-600">ครั้ง</span>`;
+    document.getElementById('stat-leave').innerHTML = `${totalLeave} <span class="text-sm font-normal text-rose-600">รายการ</span>`;
+    renderExecutiveReportChart(totalOnTime, totalLate, totalLeave);
+    filterReportTable();
 }
 
 function renderExecutiveReportChart(totalOnTime, totalLate, totalLeave) {
